@@ -176,7 +176,12 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <h1 class="title">🏆 {{ t('leaderboard.title') }}</h1>
+  <div class="lb-header">
+    <h1 class="title" style="margin:0">🏆 {{ t('leaderboard.title') }}</h1>
+    <Button class="btn secondary lb-refresh" :disabled="loading" @click="load">
+      <i class="pi pi-refresh" :class="{ 'pi-spin': loading }" />
+    </Button>
+  </div>
   <p class="subtitle">{{ subtitle }}</p>
 
   <div class="lb-tabs">
@@ -295,6 +300,16 @@ const subtitle = computed(() => {
 </template>
 
 <style scoped>
+.lb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.lb-refresh {
+  padding: 6px 10px;
+  font-size: 14px;
+}
 .lb-state {
   display: flex;
   flex-direction: column;

@@ -53,6 +53,7 @@ async function buyChest() {
     if (e) throw e;
     game.coins = Number(data.coins);
     await Promise.all([game.load(), loadChestStatus()]);
+    chestQty.value = 1;
     await new Promise(r => setTimeout(r, 800));
     chestAnim.value = { phase: "open", species: data.species };
     await new Promise(r => setTimeout(r, 500));
@@ -377,6 +378,10 @@ async function redeemPromo() {
   }
 }
 
+function dismissAnimalLimitWarning() {
+  animalLimitWarning.value = false;
+}
+
 function closeAnimalLimitWarning() {
   animalLimitWarning.value = false;
   router.push('/tickets');
@@ -420,7 +425,7 @@ function closeAnimalLimitWarning() {
     </div>
 
     <div
-      v-if="false"
+      v-if="auth.profile?.is_admin"
       class="card"
       style="background: linear-gradient(135deg, #3a1d5c, #1d2a5c)"
     >
@@ -735,7 +740,7 @@ function closeAnimalLimitWarning() {
   </div>
 
   <!-- Animal Limit Warning Modal -->
-  <div v-if="animalLimitWarning" class="chest-modal" @click.self="closeAnimalLimitWarning">
+  <div v-if="animalLimitWarning" class="chest-modal" @click.self="dismissAnimalLimitWarning">
     <div class="warning-dialog">
       <div class="warning-icon">⚠️</div>
       <h2 class="warning-title">{{ t("shop.animalLimitWarningTitle") }}</h2>

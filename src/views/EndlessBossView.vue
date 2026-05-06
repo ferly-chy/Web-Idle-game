@@ -194,7 +194,6 @@ async function onEndlessFinish({ damage, runId }) {
       newBest: newDamage > previousBest
     };
     activeRun.value = null;
-    if (Number(data?.coins) > 0) game.coins = Number(data.coins);
     await Promise.all([loadStatus(), loadLeaderboard(), game.load().catch(() => {})]);
   } catch (e) {
     appToast.err(e?.message || "finish failed");
