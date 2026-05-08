@@ -76,7 +76,7 @@ export const useGameStore = defineStore('game', {
     },
     baseRate(state) {
       return state.animals
-        .filter(a => a.equipped && !isUpgrading(a))
+        .filter(a => a.equipped && !isUpgrading(a, state.serverOffset))
         .reduce((sum, a) => sum + animalRate(a), 0)
     },
     bossPathEndsAt(state) {
@@ -141,13 +141,13 @@ export const useGameStore = defineStore('game', {
     },
     favoriteBoostActive(state) {
       const fav = this.favoriteAnimal
-      return this.boostActive && !!fav && !!fav.equipped && !isUpgrading(fav)
+      return this.boostActive && !!fav && !!fav.equipped && !isUpgrading(fav, state.serverOffset)
     },
     ratePerSec(state) {
       const fav = this.favoriteAnimal
       let total = 0
       for (const a of state.animals) {
-        if (!a.equipped || isUpgrading(a)) continue
+        if (!a.equipped || isUpgrading(a, state.serverOffset)) continue
         const r = animalRate(a)
         const isFav = fav && a.id === fav.id
         total += r * (isFav && this.boostActive ? state.petBoostMultiplier : 1)
@@ -157,7 +157,7 @@ export const useGameStore = defineStore('game', {
     rateForAnimal(state) {
       return (a) => {
         if (!a) return 0
-        if (isUpgrading(a)) return 0
+        if (isUpgrading(a, state.serverOffset)) return 0
         const r = animalRate(a)
         const isFav = state.favoriteAnimalId === a.id
         return r * (isFav && this.boostActive ? state.petBoostMultiplier : 1)
@@ -561,7 +561,7 @@ export const useGameStore = defineStore('game', {
     async equipBestAnimals() {
       await this.persist()
       const bestIds = this.animals
-        .filter(a => !isUpgrading(a))
+        .filter(a => !isUpgrading(a, this.serverOffset))
         .slice()
         .sort(compareAnimalsByRate)
         .slice(0, this.equipSlots)

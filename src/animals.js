@@ -106,18 +106,22 @@ export function compareAnimalsByRate(a, b) {
   return String(a.id || '').localeCompare(String(b.id || ''))
 }
 
-export function isUpgrading(a) {
+export function isUpgrading(a, serverOffset = 0) {
   if (!a?.upgrade_ready_at) return false
-  return new Date(a.upgrade_ready_at).getTime() > Date.now()
+  return new Date(a.upgrade_ready_at).getTime() > Date.now() + serverOffset
 }
 
 export function formatCoins(n) {
   n = Math.floor(Number(n) || 0)
   if (n < 1000) return n.toString()
-  const units = ['', 'K', 'M', 'B', 'T', 'Q']
+  const units = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc']
   let i = 0
   let v = n
   while (v >= 1000 && i < units.length - 1) { v /= 1000; i++ }
+  if (v >= 1000) {
+    // beyond Dc (10^36): fall back to scientific notation
+    return n.toExponential(2).replace('+', '')
+  }
   const decimals = v < 10 ? 2 : v < 100 ? 1 : 0
   const factor = 10 ** decimals
   return (Math.floor(v * factor) / factor).toFixed(decimals) + units[i]

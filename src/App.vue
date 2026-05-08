@@ -89,7 +89,31 @@ watch(
 onUnmounted(() => {
   if (broadcastTimer) clearTimeout(broadcastTimer);
   if (broadcastChannel) supabase.removeChannel(broadcastChannel);
+  if (tickInterval) clearInterval(tickInterval);
+  if (persistInterval) clearInterval(persistInterval);
+  window.removeEventListener("beforeunload", onBeforeUnload);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  window.removeEventListener("focus", refreshOnReturn);
+  window.removeEventListener("pageshow", onPageshow);
 });
+
+let tickInterval = null;
+let persistInterval = null;
+
+function onBeforeUnload() {
+  if (auth.isAuth) game.persist();
+}
+function onVisibilityChange() {
+  if (document.visibilityState === "hidden" && auth.isAuth) {
+    game.persist();
+  } else if (document.visibilityState === "visible") {
+    refreshOnReturn();
+  }
+}
+function onPageshow(e) {
+  // bfcache-Wiederherstellung (mobile Safari, Firefox): Daten sind dann garantiert alt.
+  if (e.persisted) refreshOnReturn();
+}
 
 onMounted(async () => {
   if (auth.isAuth) {
@@ -100,7 +124,7 @@ onMounted(async () => {
   // Game-Tick: 500ms reicht fuer Tickcoin-Animation, halbiert den Re-render-Overhead
   // gegenueber 250ms (alte Geraete spuerbar fluessiger).
   let last = performance.now();
-  setInterval(() => {
+  tickInterval = setInterval(() => {
     if (document.visibilityState !== "visible") return;
     const now = performance.now();
     // Cap dt at 1s to prevent huge coin spikes when tab returns from hidden state.
@@ -110,24 +134,13 @@ onMounted(async () => {
     try { if (auth.isAuth) game.tick(dt); } catch {}
   }, 500);
 
-  setInterval(() => {
+  persistInterval = setInterval(() => {
     if (auth.isAuth) game.persist();
   }, 15000);
-  window.addEventListener("beforeunload", () => {
-    if (auth.isAuth) game.persist();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden" && auth.isAuth) {
-      game.persist();
-    } else if (document.visibilityState === "visible") {
-      refreshOnReturn();
-    }
-  });
+  window.addEventListener("beforeunload", onBeforeUnload);
+  document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("focus", refreshOnReturn);
-  window.addEventListener("pageshow", (e) => {
-    // bfcache-Wiederherstellung (mobile Safari, Firefox): Daten sind dann garantiert alt.
-    if (e.persisted) refreshOnReturn();
-  });
+  window.addEventListener("pageshow", onPageshow);
 });
 
 // Bei Route-Wechsel prüfen ob Daten veraltet sind
@@ -146,19 +159,6 @@ const tutorialDimActive = computed(() => {
 });
 
 const reloading = ref(false);
-
-async function softRefresh() {
-  if (reloading.value) return;
-  reloading.value = true;
-  try {
-    if (auth.isAuth) await game.load();
-  } catch {
-    // Soft-Refresh fehlgeschlagen → Hard-Reload als Fallback
-    await hardReload();
-  } finally {
-    reloading.value = false;
-  }
-}
 
 async function hardReload() {
   try {

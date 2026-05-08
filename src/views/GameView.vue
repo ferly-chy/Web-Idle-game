@@ -139,7 +139,8 @@ const I18N = {
     bossPath: {
       title: "👑 Boss-Kampf",
       sub: "Bosspfad ({total} Etappen) und Endlessboss-Challenge",
-      stage: "Etappe {n} / {total}"
+      stage: "Etappe {n} / {total}",
+      bossBoostActive: "Boss-Boost aktiv"
     },
     mergeLink: {
       title: "🐾 Merge-Safari",
@@ -265,7 +266,8 @@ const I18N = {
     bossPath: {
       title: "👑 Boss fight",
       sub: "Boss path ({total} stages) and endless boss challenge",
-      stage: "Stage {n} / {total}"
+      stage: "Stage {n} / {total}",
+      bossBoostActive: "Boss boost active"
     },
     mergeLink: {
       title: "🐾 Merge Safari",
@@ -391,7 +393,8 @@ const I18N = {
     bossPath: {
       title: "👑 Бой с боссами",
       sub: "Путь босса ({total} этапов) и эндлесс-челлендж",
-      stage: "Этап {n} / {total}"
+      stage: "Этап {n} / {total}",
+      bossBoostActive: "Босс-буст активен"
     },
     mergeLink: {
       title: "🐾 Merge-Сафари",
@@ -528,6 +531,7 @@ let floatId = 0;
 const floatTimers = new Set();
 const error = ref("");
 const equipBestBusy = ref(false);
+let tapInFlight = false;
 
 const now = ref(Date.now());
 let clockTimer;
@@ -563,11 +567,7 @@ const boostRemaining = computed(() => {
   return Math.max(0, game.petBoostUntil - (Date.now() + game.serverOffset));
 });
 
-const bossBoostLabel = computed(() => {
-  if (locale.value === "de") return "Boss-Boost aktiv";
-  if (locale.value === "ru") return "Босс-буст активен";
-  return "Boss boost active";
-});
+const bossBoostLabel = computed(() => tx("bossPath.bossBoostActive"));
 
 function fmtCountdown(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -589,11 +589,11 @@ function fmtCountdown(ms) {
 
 const bossPathRemaining = computed(() => {
   void now.value;
-  return Math.max(0, game.bossPathEndsAt - Date.now());
+  return Math.max(0, game.bossPathEndsAt - (Date.now() + game.serverOffset));
 });
 const mergeRemaining = computed(() => {
   void now.value;
-  return Math.max(0, game.mergeEndsAt - Date.now());
+  return Math.max(0, game.mergeEndsAt - (Date.now() + game.serverOffset));
 });
 const bossPathEnded = computed(() => game.bossPathShowCountdown && (bossPathRemaining.value <= 0 || !game.bossPathActive));
 const mergeEnded = computed(() => game.mergeShowCountdown && (mergeRemaining.value <= 0 || !game.mergeActive));
@@ -603,7 +603,7 @@ const tapLimitReached = computed(
 );
 
 async function tap(e) {
-  if (tapLimitReached.value) return;
+  if (tapLimitReached.value || tapInFlight) return;
   const rect = e.currentTarget.getBoundingClientRect();
   const x =
     (e.clientX ?? e.touches?.[0]?.clientX ?? rect.left + rect.width / 2) -
@@ -619,6 +619,7 @@ async function tap(e) {
     floats.value = floats.value.filter((f) => f.id !== id);
   }, 900);
   floatTimers.add(ft);
+  tapInFlight = true;
   try {
     const data = await game.tapEarn();
     const f = floats.value.find((f) => f.id === id);
@@ -626,6 +627,8 @@ async function tap(e) {
   } catch (err) {
     floats.value = floats.value.filter((f) => f.id !== id);
     appToast.err(err);
+  } finally {
+    tapInFlight = false;
   }
 }
 
