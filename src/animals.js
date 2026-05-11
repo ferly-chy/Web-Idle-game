@@ -106,9 +106,9 @@ export function compareAnimalsByRate(a, b) {
   return String(a.id || '').localeCompare(String(b.id || ''))
 }
 
-export function isUpgrading(a) {
+export function isUpgrading(a, serverOffset = 0) {
   if (!a?.upgrade_ready_at) return false
-  return new Date(a.upgrade_ready_at).getTime() > Date.now()
+  return new Date(a.upgrade_ready_at).getTime() > Date.now() + serverOffset
 }
 
 export function formatCoins(n) {
@@ -127,8 +127,14 @@ export function parseCoinInput(input) {
   if (input == null) return null
   let s = String(input).trim().toLowerCase().replace(/\s|_/g, '')
   if (!s) return 0
-  // German/European thousand-dot format must be checked first: "1.000" or "1.000.000"
-  // because the main regex would otherwise parse "1.000" as the decimal value 1.0
+  // Comma-as-thousands-separator (English style): "1,000" or "1,000,000"
+  const commaThousands = s.match(/^\d{1,3}(,\d{3})+$/)
+  if (commaThousands) {
+    const n = parseInt(s.replace(/,/g, ''), 10)
+    return isFinite(n) ? n : null
+  }
+  // German/European thousand-dot format: "1.000" or "1.000.000"
+  // must be checked before the main regex which would parse "1.000" as decimal 1.0
   const altMatch = s.match(/^(\d{1,3}(?:\.\d{3})+)$/)
   if (altMatch) {
     const n = parseInt(altMatch[1].replace(/\./g, ''), 10)

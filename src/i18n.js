@@ -141,7 +141,9 @@ const messages = {
       notEnoughCoins: 'Nicht genug Münzen',
       offlineLimitMax: 'Maximales Offline-Limit erreicht',
       boostAlreadyActive: 'Boost ist bereits aktiv',
-      unknownSpecies: 'Unbekannte Spezies'
+      unknownSpecies: 'Unbekannte Spezies',
+      invalidAmount: 'Ungültiger Betrag',
+      noCraftJob: 'Kein aktiver Craft-Auftrag'
     },
     settingsFlash: {
       enterEmail: 'E-Mail eingeben',
@@ -475,7 +477,9 @@ const messages = {
       notEnoughCoins: 'Not enough coins',
       offlineLimitMax: 'Maximum offline limit reached',
       boostAlreadyActive: 'Boost is already active',
-      unknownSpecies: 'Unknown species'
+      unknownSpecies: 'Unknown species',
+      invalidAmount: 'Invalid amount',
+      noCraftJob: 'No active craft job'
     },
     settingsFlash: {
       enterEmail: 'Enter email',
@@ -812,7 +816,9 @@ const messages = {
       notEnoughCoins: 'Недостаточно монет',
       offlineLimitMax: 'Достигнут максимальный офлайн-лимит',
       boostAlreadyActive: 'Буст уже активен',
-      unknownSpecies: 'Неизвестный вид'
+      unknownSpecies: 'Неизвестный вид',
+      invalidAmount: 'Неверная сумма',
+      noCraftJob: 'Нет активного задания крафта'
     },
     settingsFlash: {
       enterEmail: 'Введите email',

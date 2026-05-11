@@ -19,8 +19,8 @@ const appToast = useAppToast();
 const tab = ref(route.query.tab === "food" ? "food" : "animals");
 watch(
   () => route.query.tab,
-  (t) => {
-    if (t === "food" || t === "animals") tab.value = t;
+  (newTab) => {
+    if (newTab === "food" || newTab === "animals") tab.value = newTab;
   },
 );
 
