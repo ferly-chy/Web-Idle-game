@@ -3,16 +3,17 @@ import { Capacitor } from '@capacitor/core'
 import { supabase, AUTH_REDIRECT_URL } from '../supabase'
 import { t } from '../i18n'
 
-const GOOGLE_WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID
-
-let nativeSocialLoginInitialized = false
-async function ensureNativeSocialLogin() {
-  if (nativeSocialLoginInitialized) return
-  const { SocialLogin } = await import('@capgo/capacitor-social-login')
-  await SocialLogin.initialize({
-    google: { webClientId: GOOGLE_WEB_CLIENT_ID, mode: 'online' }
+// Native: OAuth-URL holen, im System-Browser/Custom-Tab öffnen,
+// Rückweg via Deep Link (siehe main.js applyTokensFromUrl).
+async function nativeOAuth(supabaseMethod, opts) {
+  const { data, error } = await supabaseMethod({
+    ...opts,
+    options: { ...opts.options, skipBrowserRedirect: true }
   })
-  nativeSocialLoginInitialized = true
+  if (error) throw error
+  if (!data?.url) throw new Error('OAuth URL missing')
+  const { Browser } = await import('@capacitor/browser')
+  await Browser.open({ url: data.url, presentationStyle: 'popover' })
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -93,33 +94,33 @@ export const useAuthStore = defineStore('auth', {
       if (error) throw error
     },
     async signInWithGoogle() {
-      if (Capacitor.isNativePlatform()) {
-        await ensureNativeSocialLogin()
-        const { SocialLogin } = await import('@capgo/capacitor-social-login')
-        const res = await SocialLogin.login({ provider: 'google', options: {} })
-        const idToken = res?.result?.idToken
-        if (!idToken) throw new Error('Google ID token missing')
-        const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })
-        if (error) throw error
-        return
-      }
-      const { error } = await supabase.auth.signInWithOAuth({
+      const opts = {
         provider: 'google',
         options: {
           redirectTo: AUTH_REDIRECT_URL,
           queryParams: { prompt: 'select_account' }
         }
-      })
+      }
+      if (Capacitor.isNativePlatform()) {
+        await nativeOAuth(supabase.auth.signInWithOAuth.bind(supabase.auth), opts)
+        return
+      }
+      const { error } = await supabase.auth.signInWithOAuth(opts)
       if (error) throw error
     },
     async linkGoogleIdentity() {
-      const { error } = await supabase.auth.linkIdentity({
+      const opts = {
         provider: 'google',
         options: {
           redirectTo: AUTH_REDIRECT_URL,
           queryParams: { prompt: 'select_account' }
         }
-      })
+      }
+      if (Capacitor.isNativePlatform()) {
+        await nativeOAuth(supabase.auth.linkIdentity.bind(supabase.auth), opts)
+        return
+      }
+      const { error } = await supabase.auth.linkIdentity(opts)
       if (error) throw error
     },
     async unlinkGoogleIdentity() {
@@ -190,12 +191,6 @@ export const useAuthStore = defineStore('auth', {
       return data
     },
     async signOut() {
-      if (Capacitor.isNativePlatform() && nativeSocialLoginInitialized) {
-        try {
-          const { SocialLogin } = await import('@capgo/capacitor-social-login')
-          await SocialLogin.logout({ provider: 'google' })
-        } catch (e) { /* ignore native logout errors */ }
-      }
       await supabase.auth.signOut()
       this.profile = null
       this.identities = []

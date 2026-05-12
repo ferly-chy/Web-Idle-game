@@ -18,6 +18,7 @@ import './styles.css'
 import 'primeicons/primeicons.css'
 import { initLocale, t } from './i18n'
 import './composables/useAnimations'
+import { fireAppResume } from './composables/useAppResume'
 // Zoom global deaktivieren (Pinch, Double-Tap, Gesture-Zoom).
 function disableZoomGestures() {
   let lastTouchEnd = 0
@@ -87,12 +88,43 @@ async function registerNativeDeepLinkHandler() {
   const { App: CapacitorApp } = await import('@capacitor/app')
   CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
     if (!url) return
-    await applyTokensFromUrl(url)
+    const handled = await applyTokensFromUrl(url)
+    if (handled) {
+      try {
+        const { Browser } = await import('@capacitor/browser')
+        await Browser.close()
+      } catch (e) { /* in-app browser may already be closed */ }
+    }
   })
+}
+
+function registerAppResumeListeners() {
+  // Web-Events
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') fireAppResume('visibilitychange')
+  })
+  window.addEventListener('focus', () => fireAppResume('focus'))
+  window.addEventListener('pageshow', (e) => { if (e.persisted) fireAppResume('pageshow') })
+  window.addEventListener('online', () => fireAppResume('online'))
+}
+
+async function registerNativeAppResumeListeners() {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    const { App: CapacitorApp } = await import('@capacitor/app')
+    CapacitorApp.addListener('appStateChange', (state) => {
+      if (state?.isActive) fireAppResume('appStateChange')
+    })
+    CapacitorApp.addListener('resume', () => fireAppResume('resume'))
+  } catch (e) {
+    console.warn('Native app resume listener failed', e)
+  }
 }
 
 async function bootstrap() {
   initLocale()
+  registerAppResumeListeners()
+  registerNativeAppResumeListeners() // fire-and-forget, läuft im Hintergrund weiter
   await consumeAuthRedirect()
   await registerNativeDeepLinkHandler()
 
