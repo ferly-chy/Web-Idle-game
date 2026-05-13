@@ -49,6 +49,7 @@ let broadcastTimer = null;
 let broadcastChannel = null;
 let tickTimer = null;
 let persistTimer = null;
+let staleTimer = null;
 
 function showBroadcast(msg) {
   broadcast.value = { id: Date.now(), text: msg };
@@ -93,6 +94,7 @@ watch(
 onUnmounted(() => {
   if (tickTimer) clearInterval(tickTimer);
   if (persistTimer) clearInterval(persistTimer);
+  if (staleTimer) clearInterval(staleTimer);
   if (broadcastTimer) clearTimeout(broadcastTimer);
   if (broadcastChannel) supabase.removeChannel(broadcastChannel);
 });
@@ -121,7 +123,7 @@ onMounted(async () => {
   }, 15000);
 
   // Sicherheitsnetz: regelmäßig prüfen, ob Daten alt sind (auch wenn resume-Events ausfallen).
-  setInterval(() => {
+  staleTimer = setInterval(() => {
     if (document.visibilityState !== 'visible') return;
     if (!auth.isAuth || game.loading) return;
     if (Date.now() - game.lastLoadedAt > STALE_MS) {

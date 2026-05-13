@@ -112,7 +112,7 @@ export function isUpgrading(a) {
 }
 
 export function formatCoins(n) {
-  n = Math.floor(Number(n) || 0)
+  n = Math.max(0, Math.floor(Number(n) || 0))
   if (n < 1000) return n.toString()
   const units = ['', 'K', 'M', 'B', 'T', 'Q']
   let i = 0

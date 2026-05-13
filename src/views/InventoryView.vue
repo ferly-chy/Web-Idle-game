@@ -131,9 +131,7 @@ async function equipAll(group) {
   if (!toEquip.length) return;
   busy.value = `eq-${group.key}`;
   try {
-    for (const id of toEquip) {
-      await game.equipAnimal(id);
-    }
+    await Promise.all(toEquip.map(id => game.equipAnimal(id)));
   } catch (e) {
     appToast.err(e);
   } finally {
@@ -158,9 +156,7 @@ async function unequipAll(group) {
   if (!group.equippedIds.length) return;
   busy.value = `uneq-${group.key}`;
   try {
-    for (const id of group.equippedIds) {
-      await game.unequipAnimal(id);
-    }
+    await Promise.all(group.equippedIds.map(id => game.unequipAnimal(id)));
   } catch (e) {
     appToast.err(e);
   } finally {

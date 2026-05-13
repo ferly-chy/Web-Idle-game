@@ -7,6 +7,7 @@ import { t } from '../i18n'
 const TAP_MAX = 10
 const TAP_MUL_MAX_LEVEL = 300
 const TAP_CAP_MAX_LEVEL = 300
+let catalogLoadPromise = null
 const SLOT_MAX = 12
 const BOSS_BOOST_MULTIPLIER = 10
 const BOSS_BOOST_DURATION_MS = 10 * 60 * 1000
@@ -197,7 +198,8 @@ export const useGameStore = defineStore('game', {
   actions: {
     async ensureCatalog() {
       if (this.catalogLoaded) return
-      await loadCatalog()
+      if (!catalogLoadPromise) catalogLoadPromise = loadCatalog()
+      await catalogLoadPromise
       this.catalogLoaded = true
     },
     async load() {
@@ -328,7 +330,7 @@ export const useGameStore = defineStore('game', {
       this.lastCollected = new Date()
     },
     async tapEarn() {
-      const normalMax = 10 + (this.tapCapLevel - 1) * 5
+      const normalMax = this.tapsMax
       const usingBonus = this.tapsUsed >= normalMax && this.bonusTaps > 0
       if (this.tapsUsed >= normalMax && !usingBonus) throw new Error(t('storeErrors.tapLimit'))
       this.tapsUsed += 1
