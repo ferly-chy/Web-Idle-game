@@ -265,3 +265,123 @@ end $$;
 
 revoke all on function public.get_memory_state(uuid) from public, anon, authenticated;
 grant execute on function public.get_memory_state(uuid) to service_role;
+
+-- Deckt Karte p_index auf. Erste Karte des Versuchs -> nur aufdecken.
+-- Zweite Karte -> Versuch zaehlen, Match pruefen. Bei Zuglimit ohne
+-- Loesung: gleiches Level neu mischen (kein Fortschritt).
+create or replace function public.memory_flip(
+  p_user_id uuid,
+  p_seen_version uuid,
+  p_index int
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_st public.memory_player_states%rowtype;
+  v_cfg public.memory_level_configs%rowtype;
+  v_board jsonb;
+  v_a int;
+  v_b int;
+  v_sa text;
+  v_sb text;
+  v_matched boolean := false;
+  v_cleared boolean := false;
+  v_failed boolean := false;
+  v_matched_count int;
+begin
+  if p_user_id is null then raise exception 'missing user'; end if;
+  if not public.event_is_active('memory_game') then
+    raise exception 'event ended';
+  end if;
+
+  select * into v_st from public.memory_player_states
+   where user_id = p_user_id and version = p_seen_version
+   for update;
+  if not found then raise exception 'state conflict'; end if;
+
+  select * into v_cfg from public.memory_level_configs where level = v_st.level;
+  if not found then raise exception 'no level config'; end if;
+
+  v_board := v_st.board;
+  if p_index < 0 or p_index >= jsonb_array_length(v_board) then
+    raise exception 'invalid index';
+  end if;
+  if (v_board -> p_index ->> 'matched')::boolean = true then
+    raise exception 'already matched';
+  end if;
+  if p_index = any(v_st.revealed) then
+    raise exception 'already revealed';
+  end if;
+  if array_length(v_st.revealed, 1) >= 2 then
+    v_st.revealed := '{}';
+  end if;
+
+  if coalesce(array_length(v_st.revealed, 1), 0) = 0 then
+    update public.memory_player_states
+       set revealed = array[p_index],
+           version = gen_random_uuid(),
+           updated_at = now()
+     where user_id = p_user_id
+     returning * into v_st;
+  else
+    v_a := v_st.revealed[1];
+    v_b := p_index;
+    v_sa := v_board -> v_a ->> 'species';
+    v_sb := v_board -> v_b ->> 'species';
+
+    if v_sa = v_sb then
+      v_matched := true;
+      v_board := jsonb_set(v_board, array[v_a::text, 'matched'], 'true'::jsonb);
+      v_board := jsonb_set(v_board, array[v_b::text, 'matched'], 'true'::jsonb);
+    end if;
+
+    select count(*) into v_matched_count
+      from jsonb_array_elements(v_board) e
+     where (e->>'matched')::boolean = true;
+    v_cleared := (v_matched_count = jsonb_array_length(v_board));
+
+    if not v_cleared
+       and (v_st.moves_used + 1) >= v_cfg.move_limit then
+      v_failed := true;
+    end if;
+
+    if v_failed then
+      update public.memory_player_states
+         set board = public.memory_build_board(v_cfg.pairs),
+             revealed = '{}',
+             moves_used = 0,
+             level_started_at = now(),
+             version = gen_random_uuid(),
+             updated_at = now()
+       where user_id = p_user_id
+       returning * into v_st;
+    else
+      update public.memory_player_states
+         set board = v_board,
+             revealed = case when v_matched then '{}'::int[] else array[v_a, v_b] end,
+             moves_used = v_st.moves_used + 1,
+             total_pairs = total_pairs + case when v_matched then 1 else 0 end,
+             version = gen_random_uuid(),
+             updated_at = now()
+       where user_id = p_user_id
+       returning * into v_st;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'turn', jsonb_build_object(
+      'matched', v_matched,
+      'cleared', v_cleared,
+      'failed', v_failed,
+      'flipped_index', p_index
+    ),
+    'state', public.get_memory_state(p_user_id)
+  );
+end $$;
+
+revoke all on function public.memory_flip(uuid, uuid, int) from public, anon, authenticated;
+grant execute on function public.memory_flip(uuid, uuid, int) to service_role;
