@@ -510,3 +510,114 @@ end $$;
 
 revoke all on function public.memory_reset_level(uuid) from public, anon, authenticated;
 grant execute on function public.memory_reset_level(uuid) to service_role;
+
+-- Loest einen offenen Reward ein: 'chest' -> gewichteter Zufall aus
+-- species_costs (wie open_boss_chest), 'animal' -> garantierte Art/Stufe.
+create or replace function public.memory_open_chest(
+  p_user_id uuid,
+  p_reward_id bigint
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_rew record;
+  v_qty int;
+  v_w_total int;
+  v_r int;
+  v_acc int;
+  v_rec record;
+  v_picked text;
+  v_ids uuid[] := '{}';
+  v_species text[] := '{}';
+  v_tier text;
+  v_new public.animals%rowtype;
+  i int;
+begin
+  if p_user_id is null then raise exception 'missing user'; end if;
+
+  select * into v_rew from public.memory_level_rewards
+   where id = p_reward_id and user_id = p_user_id for update;
+  if not found then raise exception 'reward not found'; end if;
+  if v_rew.consumed_at is not null then raise exception 'already opened'; end if;
+
+  if v_rew.kind = 'animal' then
+    v_picked := v_rew.payload->>'species';
+    v_tier := coalesce(nullif(v_rew.payload->>'tier',''), 'normal');
+    v_qty := greatest(1, coalesce((v_rew.payload->>'qty')::int, 1));
+    if not exists (select 1 from public.species_costs where species = v_picked) then
+      raise exception 'unknown reward species';
+    end if;
+    for i in 1..least(v_qty, 50) loop
+      insert into public.animals(owner_id, species, tier, equipped)
+      values (p_user_id, v_picked, v_tier, false)
+      returning * into v_new;
+      v_ids := v_ids || v_new.id;
+      v_species := v_species || v_picked;
+    end loop;
+  else
+    v_qty := greatest(1, coalesce((v_rew.payload->>'chest_qty')::int, 1));
+    select coalesce(sum(weight), 0) into v_w_total
+      from public.species_costs where enabled and weight > 0;
+    if v_w_total <= 0 then raise exception 'no species available'; end if;
+
+    for i in 1..v_qty loop
+      v_r := 1 + floor(random() * v_w_total)::int;
+      v_acc := 0;
+      v_picked := null;
+      for v_rec in
+        select species, weight from public.species_costs
+         where enabled and weight > 0 order by species
+      loop
+        v_acc := v_acc + v_rec.weight;
+        if v_r <= v_acc then v_picked := v_rec.species; exit; end if;
+      end loop;
+      if v_picked is null then
+        select species into v_picked from public.species_costs
+         where enabled and weight > 0 order by species limit 1;
+      end if;
+      insert into public.animals(owner_id, species, equipped)
+      values (p_user_id, v_picked, false)
+      returning * into v_new;
+      v_ids := v_ids || v_new.id;
+      v_species := v_species || v_picked;
+    end loop;
+  end if;
+
+  update public.memory_level_rewards
+     set consumed_at = now() where id = p_reward_id;
+
+  return jsonb_build_object(
+    'reward_id', p_reward_id,
+    'kind', v_rew.kind,
+    'qty', coalesce(array_length(v_ids, 1), 0),
+    'species', to_jsonb(v_species),
+    'animal_ids', to_jsonb(v_ids)
+  );
+end $$;
+
+revoke all on function public.memory_open_chest(uuid, bigint) from public, anon, authenticated;
+grant execute on function public.memory_open_chest(uuid, bigint) to service_role;
+
+create or replace function public.get_memory_leaderboard(p_limit int default 50)
+returns table (
+  username text,
+  avatar_emoji text,
+  highest_level int,
+  total_pairs bigint,
+  total_levels_cleared int
+) language sql security definer set search_path = public as $$
+  select p.username, p.avatar_emoji,
+         m.highest_level, m.total_pairs, m.total_levels_cleared
+  from public.memory_player_states m
+  join public.profiles p on p.id = m.user_id
+  where coalesce(p.is_banned, false) = false
+    and (m.highest_level > 0 or m.total_pairs > 0)
+  order by m.highest_level desc, m.total_pairs desc
+  limit greatest(1, least(p_limit, 100));
+$$;
+
+grant execute on function public.get_memory_leaderboard(int) to authenticated, anon;
