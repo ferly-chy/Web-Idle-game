@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { localePreference, setLocale, t, LOCALE_OPTIONS } from '../i18n'
+import { animationsEnabled } from '../composables/useAnimations'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -225,6 +226,15 @@ async function logout() {
     </section>
 
     <section class="card stack">
+      <h2 style="margin:0">{{ t('settings.animationsTitle') }}</h2>
+      <p class="hint">{{ t('settings.animationsHint') }}</p>
+      <label class="row anim-row" for="animations-toggle">
+        <span>{{ t('settings.animationsLabel') }}</span>
+        <Checkbox v-model="animationsEnabled" binary inputId="animations-toggle" />
+      </label>
+    </section>
+
+    <section class="card stack">
       <h2 style="margin:0">{{ t('settings.account') }}</h2>
       <div class="row">
         <span>{{ t('settings.avatar') }}:</span>
@@ -358,6 +368,7 @@ async function logout() {
 
 <style scoped>
 .row { display: flex; justify-content: space-between; gap: 8px; }
+.anim-row { align-items: center; cursor: pointer; }
 .row.pending b { color: #e90; }
 .hint { font-size: 12px; opacity: 0.75; margin: 0; }
 .hint-link { font-size: 12px; color: var(--accent); text-decoration: underline; }

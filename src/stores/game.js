@@ -328,7 +328,7 @@ export const useGameStore = defineStore('game', {
       this.lastCollected = new Date()
     },
     async tapEarn() {
-      const normalMax = 10 + (this.tapCapLevel - 1) * 5
+      const normalMax = this.tapsMax
       const usingBonus = this.tapsUsed >= normalMax && this.bonusTaps > 0
       if (this.tapsUsed >= normalMax && !usingBonus) throw new Error(t('storeErrors.tapLimit'))
       this.tapsUsed += 1
