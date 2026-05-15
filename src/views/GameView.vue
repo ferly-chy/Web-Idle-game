@@ -76,6 +76,7 @@ const I18N = {
       animalsFood: "Tiere & Futter",
       tickets: "Tickets",
       merge: "Merge",
+      memory: "Memory",
       release: "Tier freilassen"
     },
     equipped: {
@@ -145,6 +146,10 @@ const I18N = {
       title: "🐾 Merge-Safari",
       sub: "Fusioniere Tiere, erreiche Meilensteine & erhalte Truhen"
     },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Tier-Paare finden, Level schaffen & Truhen verdienen"
+    },
     eventStatus: {
       endsIn: "Verschwindet in {time}",
       ended: "Ereignis beendet"
@@ -202,6 +207,7 @@ const I18N = {
       animalsFood: "Animals & Food",
       tickets: "Tickets",
       merge: "Merge",
+      memory: "Memory",
       release: "Release pet"
     },
     equipped: {
@@ -271,6 +277,10 @@ const I18N = {
       title: "🐾 Merge Safari",
       sub: "Merge animals, reach milestones & earn chests"
     },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Find animal pairs, clear levels & earn chests"
+    },
     eventStatus: {
       endsIn: "Disappears in {time}",
       ended: "Event ended"
@@ -328,6 +338,7 @@ const I18N = {
       animalsFood: "Животные и еда",
       tickets: "Тикеты",
       merge: "Merge",
+      memory: "Memory",
       release: "Отпустить питомца"
     },
     equipped: {
@@ -396,6 +407,10 @@ const I18N = {
     mergeLink: {
       title: "🐾 Merge-Сафари",
       sub: "Объединяй животных, достигай этапов и получай сундуки"
+    },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Находи пары животных, проходи уровни и получай сундуки"
     },
     eventStatus: {
       endsIn: "Исчезнет через {time}",
@@ -597,6 +612,11 @@ const mergeRemaining = computed(() => {
 });
 const bossPathEnded = computed(() => game.bossPathShowCountdown && (bossPathRemaining.value <= 0 || !game.bossPathActive));
 const mergeEnded = computed(() => game.mergeShowCountdown && (mergeRemaining.value <= 0 || !game.mergeActive));
+const memoryRemaining = computed(() => {
+  void now.value;
+  return Math.max(0, game.memoryEndsAt - Date.now());
+});
+const memoryEnded = computed(() => game.memoryShowCountdown && (memoryRemaining.value <= 0 || !game.memoryActive));
 
 const tapLimitReached = computed(
   () => game.tapsUsed >= game.tapsMax && game.bonusTaps <= 0,
@@ -1207,6 +1227,11 @@ async function doSplit(animalId) {
         <span class="qa-label">{{ tx("quick.merge") }}</span>
         <span class="qa-sub">2048</span>
       </router-link>
+      <router-link to="/memory" class="qa-btn">
+        <span class="qa-icon">🧠</span>
+        <span class="qa-label">{{ tx("quick.memory") }}</span>
+        <span class="qa-sub">1-20</span>
+      </router-link>
     </div>
 
     <div class="card equip-card">
@@ -1728,6 +1753,28 @@ async function doSplit(animalId) {
         >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(mergeRemaining) }) }}</div>
       </div>
       <div class="bpl-arrow">{{ mergeEnded ? '🔒' : '›' }}</div>
+    </component>
+
+    <component
+      :is="memoryEnded ? 'div' : 'router-link'"
+      :to="memoryEnded ? undefined : '/memory'"
+      class="card merge-link memory-link"
+      :class="{ 'event-ended': memoryEnded }"
+    >
+      <div class="ml-icon">🧠</div>
+      <div class="bpl-body">
+        <div class="ml-title">{{ tx("memoryLink.title") }}</div>
+        <div class="bpl-sub">{{ tx("memoryLink.sub") }}</div>
+        <div
+          v-if="memoryEnded"
+          class="bpl-event-status ended"
+        >⏰ {{ tx("eventStatus.ended") }}</div>
+        <div
+          v-else-if="game.memoryEndsAt > 0"
+          class="bpl-event-status"
+        >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(memoryRemaining) }) }}</div>
+      </div>
+      <div class="bpl-arrow">{{ memoryEnded ? '🔒' : '›' }}</div>
     </component>
   </div>
 </template>
