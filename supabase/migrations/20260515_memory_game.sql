@@ -132,3 +132,136 @@ on conflict (level) do update
       reward_species = excluded.reward_species,
       reward_tier = excluded.reward_tier,
       reward_qty = excluded.reward_qty;
+
+-- Erzeugt ein verdecktes Layout fuer p_pairs Paare aus zufaelligen,
+-- gewichteten Arten. board = jsonb-Array [{species, matched}], gemischt.
+create or replace function public.memory_build_board(p_pairs int)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_species text[];
+  v_board jsonb := '[]'::jsonb;
+  v_s text;
+begin
+  if p_pairs < 2 then raise exception 'invalid pairs'; end if;
+
+  select array_agg(species) into v_species
+  from (
+    select species from public.species_costs
+     where enabled and weight > 0
+     order by random()
+     limit p_pairs
+  ) s;
+
+  if v_species is null or array_length(v_species, 1) < p_pairs then
+    select array_agg(species) into v_species
+    from (
+      select species from public.species_costs
+       where enabled
+       order by random()
+       limit p_pairs
+    ) s2;
+  end if;
+  if v_species is null or array_length(v_species, 1) < 1 then
+    raise exception 'no species available';
+  end if;
+
+  for i in 1..p_pairs loop
+    v_s := v_species[1 + ((i - 1) % array_length(v_species, 1))];
+    v_board := v_board
+      || jsonb_build_object('species', v_s, 'matched', false)
+      || jsonb_build_object('species', v_s, 'matched', false);
+  end loop;
+
+  return (
+    select coalesce(jsonb_agg(elem order by random()), '[]'::jsonb)
+    from jsonb_array_elements(v_board) elem
+  );
+end $$;
+
+revoke all on function public.memory_build_board(int) from public, anon, authenticated;
+grant execute on function public.memory_build_board(int) to service_role;
+
+-- Liefert den Spielstand OHNE verdecktes Layout: nur gematchte + aktuell
+-- aufgedeckte Karten (mit Species/Emoji), Level-Configs und server_now.
+create or replace function public.get_memory_state(p_user_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_st public.memory_player_states%rowtype;
+  v_cfg public.memory_level_configs%rowtype;
+  v_cards jsonb := '[]'::jsonb;
+  v_configs jsonb;
+  v_idx int;
+  v_cell jsonb;
+  v_species text;
+  v_meta record;
+begin
+  if p_user_id is null then raise exception 'missing user'; end if;
+
+  select * into v_st from public.memory_player_states where user_id = p_user_id;
+  if not found then
+    select * into v_cfg from public.memory_level_configs where level = 1;
+    if not found then raise exception 'no level config'; end if;
+    insert into public.memory_player_states(user_id, level, board, level_started_at)
+    values (p_user_id, 1, public.memory_build_board(v_cfg.pairs), now())
+    returning * into v_st;
+  end if;
+
+  select * into v_cfg from public.memory_level_configs where level = v_st.level;
+  if not found then
+    select * into v_cfg from public.memory_level_configs
+     order by level desc limit 1;
+  end if;
+
+  for v_idx in 0 .. (jsonb_array_length(v_st.board) - 1) loop
+    v_cell := v_st.board -> v_idx;
+    if (v_cell->>'matched')::boolean = true
+       or v_idx = any(v_st.revealed) then
+      v_species := v_cell->>'species';
+      select name, emoji into v_meta
+        from public.species_costs where species = v_species;
+      v_cards := v_cards || jsonb_build_object(
+        'index', v_idx,
+        'species', v_species,
+        'name', coalesce(v_meta.name, v_species),
+        'emoji', coalesce(v_meta.emoji, '🐾'),
+        'matched', (v_cell->>'matched')::boolean
+      );
+    end if;
+  end loop;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'level', level, 'pairs', pairs, 'move_limit', move_limit,
+    'chest_qty', chest_qty, 'reward_species', reward_species,
+    'reward_tier', reward_tier, 'reward_qty', reward_qty
+  ) order by level), '[]'::jsonb) into v_configs
+  from public.memory_level_configs;
+
+  return jsonb_build_object(
+    'level', v_st.level,
+    'highest_level', v_st.highest_level,
+    'total_pairs', v_st.total_pairs,
+    'total_levels_cleared', v_st.total_levels_cleared,
+    'version', v_st.version,
+    'moves_used', v_st.moves_used,
+    'pairs', v_cfg.pairs,
+    'move_limit', v_cfg.move_limit,
+    'card_count', jsonb_array_length(v_st.board),
+    'visible_cards', v_cards,
+    'configs', v_configs,
+    'event_active', public.event_is_active('memory_game'),
+    'server_now', now()
+  );
+end $$;
+
+revoke all on function public.get_memory_state(uuid) from public, anon, authenticated;
+grant execute on function public.get_memory_state(uuid) to service_role;
