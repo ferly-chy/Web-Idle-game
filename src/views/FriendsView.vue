@@ -8,6 +8,7 @@ import CoinInput from '../components/CoinInput.vue'
 import { t } from '../i18n'
 import { useReturnRefresh } from '../composables/useReturnRefresh'
 import { useAppToast } from '../composables/useAppToast'
+import { isFriendRequestsDisabledError } from '../friendRequests'
 
 const router = useRouter()
 const appToast = useAppToast()
@@ -67,7 +68,7 @@ async function sendRequest() {
     requestName.value = ''
     await load()
   } catch (e) {
-    appToast.err(e)
+    appToast.err(isFriendRequestsDisabledError(e) ? t('storeErrors.friendRequestsDisabled') : e)
   } finally {
     busy.value = false
   }
