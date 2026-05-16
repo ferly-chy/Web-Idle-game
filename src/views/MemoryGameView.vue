@@ -249,11 +249,7 @@ async function completeLevel() {
     }
     await game.load()
     playOpen.value = false
-    chestReveal.value = { phase: 'shake', items: opened }
-    await wait(650)
-    chestReveal.value = { ...chestReveal.value, phase: 'open' }
-    await wait(420)
-    chestReveal.value = { ...chestReveal.value, phase: 'reveal' }
+    chestReveal.value = { phase: 'reveal', items: opened }
   } catch (e) {
     appToast.err(e?.message || 'Fehler')
     await loadGame()
