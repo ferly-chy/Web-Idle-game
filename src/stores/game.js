@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { SPECIES, loadCatalog, animalRate, compareAnimalsByRate, isUpgrading, tierInfo } from '../animals'
 import { useAuthStore } from './auth'
 import { t } from '../i18n'
+import { groupAnimalsForAutoRelease } from '../autoRelease'
 
 const TAP_MAX = 10
 const TAP_MUL_MAX_LEVEL = 300
@@ -41,7 +42,9 @@ export const useGameStore = defineStore('game', {
     bossPathCurrent: 1,
     bossPathMaxStage: 20,
     eventSchedule: {},
-    craftJob: null
+    craftJob: null,
+    autoReleaseTier: '',
+    _autoReleasing: false
   }),
   getters: {
     favoriteAnimal(state) {
@@ -270,6 +273,11 @@ export const useGameStore = defineStore('game', {
       this.loadBossPath().catch(() => {})
       this.loadEventSchedule().catch(() => {})
       this.loadCraftStatus().catch(() => {})
+      try {
+        const v = localStorage.getItem('autoReleaseTier:' + auth.user.id) || ''
+        this.autoReleaseTier = ['', 'gold', 'diamond', 'epic', 'rainbow'].includes(v) ? v : ''
+      } catch { this.autoReleaseTier = '' }
+      this.autoReleaseSweep().catch(() => {})
       this.lastLoadedAt = Date.now()
     },
     async claimPendingGifts() {
@@ -699,6 +707,43 @@ export const useGameStore = defineStore('game', {
       this.tickets = Number(data?.tickets ?? this.tickets)
       await this.load()
       return data
+    },
+    async autoReleaseSweep() {
+      const auth = useAuthStore()
+      if (!auth.user || !this.autoReleaseTier || this._autoReleasing) return
+      const groups = groupAnimalsForAutoRelease(this.animals, this.autoReleaseTier, Date.now())
+      if (groups.length === 0) return
+      this._autoReleasing = true
+      try {
+        for (const g of groups) {
+          try {
+            const { data, error } = await supabase.rpc('release_animals', {
+              p_species: g.species,
+              p_tier: g.tier || 'normal',
+              p_qty: g.ids.length
+            })
+            if (error) continue
+            if (data?.tickets != null) this.tickets = Number(data.tickets)
+            const drop = new Set(g.ids)
+            this.animals = this.animals.filter(a => !drop.has(a.id))
+            if (drop.has(this.favoriteAnimalId)) {
+              const next = this.animals.find(a => a.equipped) || this.animals[0]
+              this.favoriteAnimalId = next ? next.id : null
+            }
+          } catch { /* einzelne Gruppe ueberspringen */ }
+        }
+      } finally {
+        this._autoReleasing = false
+      }
+    },
+    setAutoReleaseTier(v) {
+      const auth = useAuthStore()
+      const next = ['', 'gold', 'diamond', 'epic', 'rainbow'].includes(v) ? v : ''
+      this.autoReleaseTier = next
+      try {
+        if (auth.user) localStorage.setItem('autoReleaseTier:' + auth.user.id, next)
+      } catch { /* localStorage nicht verfuegbar */ }
+      this.autoReleaseSweep().catch(() => {})
     },
     async getTicketShop() {
       const { data, error } = await supabase.rpc('get_ticket_shop')
