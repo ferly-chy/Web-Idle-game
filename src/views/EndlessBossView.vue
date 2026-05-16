@@ -18,9 +18,9 @@ const I18N = {
     rules: "Regeln",
     rule1: "🕒 3 Minuten pro Versuch",
     rule2: "💥 Schaden = Treffer im Match-3-Brett",
-    rule3: "⏳ 1 Stunde Cooldown nach jedem Versuch",
+    rule3: "⏳ 5 Minuten Cooldown nach jedem Versuch",
     rule4: "🪙 1% des Schadens als Münzen-Belohnung",
-    rule5: "🎁 Truhe ab 100k Schaden (3 Tiere ab 1M Schaden)",
+    rule5: "🎁 1 Truhe pro 1.000 Schaden (max. 50 Tiere)",
     bestRun: "Dein Bestwert",
     none: "Noch kein Versuch",
     cooldownActive: "Cooldown läuft - nächster Versuch in {time}",
@@ -44,9 +44,9 @@ const I18N = {
     rules: "Rules",
     rule1: "🕒 3 minutes per attempt",
     rule2: "💥 Damage = matches on the match-3 board",
-    rule3: "⏳ 1 hour cooldown after each attempt",
+    rule3: "⏳ 5 minute cooldown after each attempt",
     rule4: "🪙 1% of damage as coin reward",
-    rule5: "🎁 Chest from 100k damage (3 animals from 1M damage)",
+    rule5: "🎁 1 chest per 1,000 damage (max. 50 animals)",
     bestRun: "Your best",
     none: "No attempts yet",
     cooldownActive: "Cooldown active - next attempt in {time}",
@@ -70,9 +70,9 @@ const I18N = {
     rules: "Правила",
     rule1: "🕒 3 минуты на попытку",
     rule2: "💥 Урон = совпадения на поле",
-    rule3: "⏳ 1 час кулдаун после каждой попытки",
+    rule3: "⏳ 5 минут кулдаун после каждой попытки",
     rule4: "🪙 1% урона как награда монетами",
-    rule5: "🎁 Сундук от 100k урона (3 животных от 1M)",
+    rule5: "🎁 1 сундук за 1 000 урона (макс. 50 животных)",
     bestRun: "Твой рекорд",
     none: "Попыток ещё нет",
     cooldownActive: "Кулдаун - следующая попытка через {time}",
@@ -103,9 +103,23 @@ const loading = ref(true);
 const starting = ref(false);
 const activeRun = ref(null);
 const lastResult = ref(null);
+const chestPhase = ref(null);
 const tickNow = ref(Date.now());
 const leaderboard = ref([]);
 let tickTimer = null;
+let chestTimers = [];
+
+function clearChestTimers() {
+  chestTimers.forEach(clearTimeout);
+  chestTimers = [];
+}
+
+const chestRevealed = computed(
+  () =>
+    !lastResult.value?.chest_qty ||
+    !chestPhase.value ||
+    chestPhase.value === "reveal"
+);
 
 const cooldownRemaining = computed(() => {
   void tickNow.value;
@@ -186,13 +200,22 @@ async function onEndlessFinish({ damage, runId }) {
     if (error) throw error;
     const previousBest = Number(status.value?.best?.damage || 0);
     const newDamage = Number(data?.damage || 0);
+    const chestSpecies = Array.isArray(data?.chest_species) ? data.chest_species : [];
     lastResult.value = {
       damage: newDamage,
       coins: Number(data?.coins_reward || 0),
       chest_qty: Number(data?.chest_qty || 0),
-      chest_species: Array.isArray(data?.chest_species) ? data.chest_species : [],
+      chest_species: chestSpecies,
       newBest: newDamage > previousBest
     };
+    clearChestTimers();
+    if (chestSpecies.length) {
+      chestPhase.value = "shake";
+      chestTimers.push(setTimeout(() => { chestPhase.value = "open"; }, 800));
+      chestTimers.push(setTimeout(() => { chestPhase.value = "reveal"; }, 1300));
+    } else {
+      chestPhase.value = null;
+    }
     activeRun.value = null;
     if (Number(data?.coins) > 0) game.coins = Number(data.coins);
     await Promise.all([loadStatus(), loadLeaderboard(), game.load().catch(() => {})]);
@@ -204,6 +227,8 @@ async function onEndlessFinish({ damage, runId }) {
 }
 
 function dismissResult() {
+  clearChestTimers();
+  chestPhase.value = null;
   lastResult.value = null;
 }
 
@@ -219,6 +244,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (tickTimer) clearInterval(tickTimer);
+  clearChestTimers();
 });
 </script>
 
@@ -241,7 +267,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <div v-if="loading" class="card eb-state">
+    <div v-if="loading && !status" class="card eb-state">
       <i class="pi pi-spin pi-spinner"></i>
       <span>{{ tx("loading") }}</span>
     </div>
@@ -273,6 +299,7 @@ onUnmounted(() => {
       <section v-else class="eb-fight">
         <div class="eb-active-banner">⚔️ {{ tx("runActive") }}</div>
         <BossFight
+          :key="activeRun.id"
           :endless-mode="true"
           :endless-run-id="activeRun.id"
           :endless-ends-at="endlessEndsAt"
@@ -305,7 +332,11 @@ onUnmounted(() => {
     </template>
 
     <Teleport to="body">
-      <div v-if="lastResult" class="eb-result-modal" @click.self="dismissResult">
+      <div
+        v-if="lastResult"
+        class="eb-result-modal"
+        @click.self="chestRevealed && dismissResult()"
+      >
         <div class="eb-result-card">
           <div class="eb-result-icon">{{ lastResult.newBest ? "🏆" : "🏁" }}</div>
           <div class="eb-result-title">{{ tx("finishedTitle") }}</div>
@@ -317,17 +348,35 @@ onUnmounted(() => {
           <div v-if="lastResult.coins > 0" class="eb-result-reward">
             {{ tx("coinsEarned", { coins: formatCoins(lastResult.coins) }) }}
           </div>
-          <div v-if="lastResult.chest_qty > 0" class="eb-result-reward">
-            {{ tx("chestEarned", { qty: lastResult.chest_qty }) }}
-            <div class="eb-result-species">
-              <span
-                v-for="(sp, i) in lastResult.chest_species"
-                :key="sp + i"
-                class="eb-result-pill"
-              >{{ speciesInfo(sp).emoji || "🐾" }} {{ speciesInfo(sp).name }}</span>
+          <div v-if="lastResult.chest_qty > 0" class="eb-chest">
+            <div
+              v-if="chestPhase && chestPhase !== 'reveal'"
+              class="eb-chest-stage"
+            >
+              <div
+                class="eb-chest-box"
+                :class="{ shake: chestPhase === 'shake', opening: chestPhase === 'open' }"
+              >🎁</div>
             </div>
+            <template v-else>
+              <div class="eb-result-reward">
+                {{ tx("chestEarned", { qty: lastResult.chest_qty }) }}
+              </div>
+              <div class="eb-result-species">
+                <span
+                  v-for="(sp, i) in lastResult.chest_species"
+                  :key="sp + i"
+                  class="eb-result-pill eb-pop"
+                  :style="{ animationDelay: (i * 0.06) + 's' }"
+                >{{ speciesInfo(sp).emoji || "🐾" }} {{ speciesInfo(sp).name }}</span>
+              </div>
+            </template>
           </div>
-          <Button class="btn full" @click="dismissResult">{{ tx("close") }}</Button>
+          <Button
+            v-if="chestRevealed"
+            class="btn full"
+            @click="dismissResult"
+          >{{ tx("close") }}</Button>
         </div>
       </div>
     </Teleport>
@@ -601,6 +650,46 @@ onUnmounted(() => {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
+}
+.eb-chest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eb-chest-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+}
+.eb-chest-box {
+  font-size: 78px;
+  filter: drop-shadow(0 0 24px rgba(255, 209, 102, 0.55));
+}
+.eb-chest-box.shake {
+  animation: ebChestShake 0.72s ease-in-out infinite;
+}
+.eb-chest-box.opening {
+  animation: ebChestOpen 0.5s ease-out forwards;
+}
+.eb-pop {
+  animation: ebPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes ebChestShake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  25% { transform: translate(-4px, -2px) rotate(-5deg); }
+  50% { transform: translate(5px, 2px) rotate(5deg); }
+  75% { transform: translate(-2px, 2px) rotate(-2deg); }
+}
+@keyframes ebChestOpen {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); filter: drop-shadow(0 0 40px rgba(255, 209, 102, 1)); }
+  100% { transform: scale(0.1); opacity: 0; }
+}
+@keyframes ebPop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.5); }
+  60% { opacity: 1; transform: translateY(-4px) scale(1.12); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (max-width: 480px) {
   .eb-hero { flex-direction: column; align-items: stretch; gap: 8px; }

@@ -76,6 +76,7 @@ const I18N = {
       animalsFood: "Tiere & Futter",
       tickets: "Tickets",
       merge: "Merge",
+      memory: "Memory",
       release: "Tier freilassen"
     },
     equipped: {
@@ -138,13 +139,15 @@ const I18N = {
     },
     bossPath: {
       title: "👑 Boss-Kampf",
-      sub: "Bosspfad ({total} Etappen) und Endlessboss-Challenge",
-      stage: "Etappe {n} / {total}",
-      bossBoostActive: "Boss-Boost aktiv"
+      sub: "Endlessboss-Challenge: 3 Minuten Schaden sammeln"
     },
     mergeLink: {
       title: "🐾 Merge-Safari",
       sub: "Fusioniere Tiere, erreiche Meilensteine & erhalte Truhen"
+    },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Tier-Paare finden, Level schaffen & Truhen verdienen"
     },
     eventStatus: {
       endsIn: "Verschwindet in {time}",
@@ -203,6 +206,7 @@ const I18N = {
       animalsFood: "Animals & Food",
       tickets: "Tickets",
       merge: "Merge",
+      memory: "Memory",
       release: "Release pet"
     },
     equipped: {
@@ -266,12 +270,15 @@ const I18N = {
     bossPath: {
       title: "👑 Boss fight",
       sub: "Boss path ({total} stages) and endless boss challenge",
-      stage: "Stage {n} / {total}",
-      bossBoostActive: "Boss boost active"
+      stage: "Stage {n} / {total}"
     },
     mergeLink: {
       title: "🐾 Merge Safari",
       sub: "Merge animals, reach milestones & earn chests"
+    },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Find animal pairs, clear levels & earn chests"
     },
     eventStatus: {
       endsIn: "Disappears in {time}",
@@ -330,6 +337,7 @@ const I18N = {
       animalsFood: "Животные и еда",
       tickets: "Тикеты",
       merge: "Merge",
+      memory: "Memory",
       release: "Отпустить питомца"
     },
     equipped: {
@@ -393,12 +401,15 @@ const I18N = {
     bossPath: {
       title: "👑 Бой с боссами",
       sub: "Путь босса ({total} этапов) и эндлесс-челлендж",
-      stage: "Этап {n} / {total}",
-      bossBoostActive: "Босс-буст активен"
+      stage: "Этап {n} / {total}"
     },
     mergeLink: {
       title: "🐾 Merge-Сафари",
       sub: "Объединяй животных, достигай этапов и получай сундуки"
+    },
+    memoryLink: {
+      title: "🧠 Memory",
+      sub: "Находи пары животных, проходи уровни и получай сундуки"
     },
     eventStatus: {
       endsIn: "Исчезнет через {time}",
@@ -585,16 +596,16 @@ function fmtCountdown(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-const bossPathRemaining = computed(() => {
-  void now.value;
-  return Math.max(0, game.bossPathEndsAt - Date.now());
-});
 const mergeRemaining = computed(() => {
   void now.value;
   return Math.max(0, game.mergeEndsAt - Date.now());
 });
-const bossPathEnded = computed(() => game.bossPathShowCountdown && (bossPathRemaining.value <= 0 || !game.bossPathActive));
 const mergeEnded = computed(() => game.mergeShowCountdown && (mergeRemaining.value <= 0 || !game.mergeActive));
+const memoryRemaining = computed(() => {
+  void now.value;
+  return Math.max(0, game.memoryEndsAt - Date.now());
+});
+const memoryEnded = computed(() => game.memoryShowCountdown && (memoryRemaining.value <= 0 || !game.memoryActive));
 
 const tapLimitReached = computed(
   () => game.tapsUsed >= game.tapsMax && game.bonusTaps <= 0,
@@ -1206,6 +1217,11 @@ async function doSplit(animalId) {
         <span class="qa-label">{{ tx("quick.merge") }}</span>
         <span class="qa-sub">2048</span>
       </router-link>
+      <router-link to="/memory" class="qa-btn">
+        <span class="qa-icon">🧠</span>
+        <span class="qa-label">{{ tx("quick.memory") }}</span>
+        <span class="qa-sub">1-20</span>
+      </router-link>
     </div>
 
     <div class="card equip-card">
@@ -1691,18 +1707,7 @@ async function doSplit(animalId) {
       <div class="bpl-icon">👑</div>
       <div class="bpl-body">
         <div class="bpl-title">{{ tx("bossPath.title") }}</div>
-        <div class="bpl-sub">{{ tx("bossPath.sub", { total: game.bossPathMaxStage }) }}</div>
-        <div v-if="game.bossPathHighest > 0" class="bpl-progress">
-          {{ tx("bossPath.stage", { n: game.bossPathHighest, total: game.bossPathMaxStage }) }}
-        </div>
-        <div
-          v-if="bossPathEnded"
-          class="bpl-event-status ended"
-        >⏰ {{ tx("eventStatus.ended") }}</div>
-        <div
-          v-else-if="game.bossPathEndsAt > 0"
-          class="bpl-event-status"
-        >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(bossPathRemaining) }) }}</div>
+        <div class="bpl-sub">{{ tx("bossPath.sub") }}</div>
       </div>
       <div class="bpl-arrow">›</div>
     </router-link>
@@ -1727,6 +1732,28 @@ async function doSplit(animalId) {
         >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(mergeRemaining) }) }}</div>
       </div>
       <div class="bpl-arrow">{{ mergeEnded ? '🔒' : '›' }}</div>
+    </component>
+
+    <component
+      :is="memoryEnded ? 'div' : 'router-link'"
+      :to="memoryEnded ? undefined : '/memory'"
+      class="card merge-link memory-link"
+      :class="{ 'event-ended': memoryEnded }"
+    >
+      <div class="ml-icon">🧠</div>
+      <div class="bpl-body">
+        <div class="ml-title">{{ tx("memoryLink.title") }}</div>
+        <div class="bpl-sub">{{ tx("memoryLink.sub") }}</div>
+        <div
+          v-if="memoryEnded"
+          class="bpl-event-status ended"
+        >⏰ {{ tx("eventStatus.ended") }}</div>
+        <div
+          v-else-if="game.memoryEndsAt > 0"
+          class="bpl-event-status"
+        >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(memoryRemaining) }) }}</div>
+      </div>
+      <div class="bpl-arrow">{{ memoryEnded ? '🔒' : '›' }}</div>
     </component>
   </div>
 </template>
@@ -2858,13 +2885,6 @@ async function doSplit(animalId) {
   font-weight: 700;
   margin-top: 2px;
 }
-.bpl-progress {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--accent);
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
-}
 .bpl-event-status {
   margin-top: 6px;
   display: inline-flex;
@@ -2884,14 +2904,12 @@ async function doSplit(animalId) {
   border-color: rgba(239, 71, 111, 0.55);
   color: #ef476f;
 }
-.boss-path-link.event-ended,
 .merge-link.event-ended {
   cursor: not-allowed;
   filter: grayscale(0.65);
   opacity: 0.7;
   border-color: rgba(239, 71, 111, 0.45);
 }
-.boss-path-link.event-ended:hover,
 .merge-link.event-ended:hover {
   transform: none;
   box-shadow: none;
