@@ -252,6 +252,7 @@ const speciesList = computed(() => {
       return {
         key,
         info,
+        autoSell: !!game.autoReleaseMap[key],
         qty: catalogQty,
         randomQty,
         forcedQty,
@@ -639,6 +640,7 @@ function goToTickets() {
           ⏰ {{ t("shop.disappeared") }}
         </div>
         <div class="animal-cost">🪙 {{ formatCoins(s.info.cost) }}</div>
+        <div v-if="s.autoSell" class="autosell-chip">{{ t("shop.autoSellBadge") }}</div>
         <Button
           v-if="s.inStock"
           class="btn full"
@@ -827,6 +829,18 @@ function goToTickets() {
   background: rgba(239, 71, 111, 0.16);
   border-color: rgba(239, 71, 111, 0.55);
   color: #ef476f;
+}
+.autosell-chip {
+  margin-top: 6px;
+  align-self: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 209, 102, 0.16);
+  border: 1px solid rgba(255, 209, 102, 0.5);
+  color: var(--accent, #ffd166);
+  text-align: center;
 }
 .admin-row {
   display: flex;

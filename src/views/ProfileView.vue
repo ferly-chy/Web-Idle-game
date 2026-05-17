@@ -7,6 +7,7 @@ import { SPECIES, tierInfo, loadCatalog, formatCoins } from '../animals'
 import { t } from '../i18n'
 import { useReturnRefresh } from '../composables/useReturnRefresh'
 import { useAppToast } from '../composables/useAppToast'
+import { isFriendRequestsDisabledError } from '../friendRequests'
 
 const route = useRoute()
 const router = useRouter()
@@ -173,7 +174,7 @@ async function sendFriendRequest() {
     if (e) throw e
     appToast.ok(data?.status === 'accepted' ? t('profile.friendRequestAccepted') : t('profile.friendRequestSent'))
   } catch (e) {
-    appToast.err(e)
+    appToast.err(isFriendRequestsDisabledError(e) ? t('storeErrors.friendRequestsDisabled') : e)
   } finally {
     sendingFriendRequest.value = false
   }
