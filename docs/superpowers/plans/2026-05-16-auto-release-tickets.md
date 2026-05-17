@@ -10,6 +10,15 @@
 
 ---
 
+## Revision 2026-05-17 — Pro-Spezies-Modell (maßgeblich)
+
+Tasks 1–3 wurden umgesetzt, die globale Schwelle aber nach Live-Test verworfen.
+Folge-Task 4 ersetzt das Schwellen-Modell durch eine Pro-Spezies-Map
+`autoReleaseMap = { [species]: maxTier }` (inklusive Max-Stufe je Spezies). Siehe
+Spec-Revision 2026-05-17. Task 4 ist nach den ursprünglichen Tasks definiert.
+
+---
+
 ## File Structure
 
 - **Create** `src/autoRelease.js` — reine Funktion `groupAnimalsForAutoRelease(animals, thresholdTier, now)` → Liste `{ species, tier, ids[] }`. Keine Imports (eigene Tier-Order-Map + Upgrade-Check), damit unter `node --test` lauffähig.
@@ -335,6 +344,25 @@ In `<style scoped>` den Block `.release-actions` (aktuell `src/views/TicketsView
 git add src/views/TicketsView.vue
 git commit -m "feat(tickets): Auto-Freilassen-Auswahl + kompaktes Button-Layout"
 ```
+
+---
+
+## Task 4: Umbau auf Pro-Spezies-Map (ersetzt Schwelle)
+
+**Files:**
+- Modify: `src/autoRelease.js`, `src/autoRelease.test.js`
+- Modify: `src/stores/game.js` (State, `load()`-Hook, `autoReleaseSweep`, Setter)
+- Modify: `src/views/TicketsView.vue` (i18n, UI-Zeile, Spezies-Badge)
+
+- [ ] **Step 1: Test auf Map-API umschreiben** — `groupAnimalsForAutoRelease(animals, autoReleaseMap, now)`: leere Map → `[]`; nur Spezies in Map mit `tierRank(tier) <= tierRank(map[species])`; upgradende ausgeschlossen; fehlende `tier` = normal; ungültiger map-Wert → Spezies ignoriert.
+- [ ] **Step 2: `npm test`** → erwartet FAIL (alte Signatur).
+- [ ] **Step 3: Helper umbauen** — Map-basierte Logik, dependency-frei, `TIER_ORDER` intern.
+- [ ] **Step 4: `npm test`** → PASS (alle grün).
+- [ ] **Step 5: Store** — State `autoReleaseTier` → `autoReleaseMap: {}`; `load()` liest/validiert JSON aus `localStorage` `autoReleaseMap:<uid>`; `autoReleaseSweep()` nutzt Map; `setAutoReleaseTier` → `setAutoReleaseSpecies(species, maxTierOrNull)` (null/'' → Key löschen), persistiert JSON, Sweep.
+- [ ] **Step 6: UI** — globale Aus/Gold/…-Zeile entfernen; in der Tier-Auswahl-Zeile (bei gewählter Spezies) Zeile „🤖 Auto bis" mit Aus/Normal/Gold/Diamant/Epic/Rainbow für `releaseSpecies`, gebunden an `game.autoReleaseMap[releaseSpecies]` → `game.setAutoReleaseSpecies(...)`; 🤖-Badge an Spezies-Buttons mit aktivem Eintrag; i18n-Keys de/en/ru anpassen (`autoUpTo`, `tierNormal`, Entfernen ungenutzter).
+- [ ] **Step 7: `npm run build`** → erfolgreich.
+- [ ] **Step 8: Browser-Verifikation** — pro Spezies konfigurieren, korrektes selektives Freilassen, kein Loop, Badge sichtbar.
+- [ ] **Step 9: Commit** `feat(tickets): Auto-Freilassen pro Spezies bis Stufe`
 
 ---
 

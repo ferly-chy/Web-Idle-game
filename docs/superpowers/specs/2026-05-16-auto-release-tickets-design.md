@@ -1,7 +1,31 @@
 # Auto-Freilassen & Button-Redesign (Tickets) — Design
 
 Datum: 2026-05-16
-Betroffene Dateien: `src/stores/game.js`, `src/views/TicketsView.vue`
+Betroffene Dateien: `src/stores/game.js`, `src/views/TicketsView.vue`, `src/autoRelease.js`
+
+## Revision 2026-05-17 (maßgeblich — ersetzt globale Schwelle)
+
+Nach Live-Test verworfen: globale „alles unter Stufe X"-Schwelle. **Neues Modell:**
+Pro Spezies eine **inklusive Maximal-Stufe**. Konfiguration ist eine Map
+`autoReleaseMap = { [species]: maxTier }` (z.B. `{ chicken: "gold" }` → Normal- und
+Gold-Küken werden automatisch freigelassen, Diamant/Epic/Rainbow bleiben). Nicht
+gelistete Spezies = kein Auto-Freilassen.
+
+- **Semantik:** Tier wird freigelassen, wenn `species in map` UND
+  `tierRank(animal.tier) <= tierRank(map[species])` UND nicht upgradend.
+- **Persistenz:** `localStorage`-Key `autoReleaseMap:<uid>`, JSON-serialisiert.
+  Der alte Key `autoReleaseTier:<uid>` und State `autoReleaseTier` entfallen
+  ersatzlos (Feature war unreleased, keine Migration nötig).
+- **Pure Helper-Signatur:** `groupAnimalsForAutoRelease(animals, autoReleaseMap, now)`.
+- **Store:** State `autoReleaseMap: {}`; `setAutoReleaseSpecies(species, maxTierOrNull)`
+  (null/leer → Spezies aus Map entfernen), persistiert JSON + Sweep.
+- **UI:** Die globale Aus/Gold/…-Zeile entfällt. Stattdessen erscheint bei
+  ausgewählter Spezies eine Zeile „🤖 Auto bis [Aus/Normal/Gold/Diamant/Epic/Rainbow]"
+  für genau diese Spezies. Spezies-Buttons mit aktivem Auto erhalten ein 🤖-Badge.
+- Re-Entrancy-Guard, app-weiter `load()`-Hook, Button-Redesign: unverändert wie unten.
+
+Die folgenden Abschnitte beschreiben das ursprüngliche (überholte) Schwellen-Modell
+und gelten nur noch für die unveränderten Teile (Guard, Hook, Button-Layout, i18n-Muster).
 
 ## Ziel
 
