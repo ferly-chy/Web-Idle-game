@@ -4,30 +4,43 @@ import { groupAnimalsForAutoRelease } from './autoRelease.js'
 
 const NOW = 1_000_000
 
-test('returns empty when threshold is off/empty', () => {
+test('returns empty when map is empty/nullish', () => {
   const animals = [{ id: 'a', species: 'chicken', tier: 'normal' }]
-  assert.deepEqual(groupAnimalsForAutoRelease(animals, '', NOW), [])
+  assert.deepEqual(groupAnimalsForAutoRelease(animals, {}, NOW), [])
   assert.deepEqual(groupAnimalsForAutoRelease(animals, null, NOW), [])
 })
 
-test('groups only animals strictly below the threshold tier', () => {
+test('releases only configured species up to the inclusive max tier', () => {
   const animals = [
     { id: 'a', species: 'chicken', tier: 'normal' },
-    { id: 'b', species: 'chicken', tier: 'normal' },
-    { id: 'c', species: 'cow', tier: 'gold' },
-    { id: 'd', species: 'cow', tier: 'diamond' }
+    { id: 'b', species: 'chicken', tier: 'gold' },
+    { id: 'c', species: 'chicken', tier: 'diamond' },
+    { id: 'd', species: 'cow', tier: 'normal' }
   ]
-  const groups = groupAnimalsForAutoRelease(animals, 'gold', NOW)
-  assert.deepEqual(groups, [{ species: 'chicken', tier: 'normal', ids: ['a', 'b'] }])
-
-  const groups2 = groupAnimalsForAutoRelease(animals, 'diamond', NOW)
+  const groups = groupAnimalsForAutoRelease(animals, { chicken: 'gold' }, NOW)
   assert.deepEqual(
-    groups2.sort((x, y) => x.species.localeCompare(y.species)),
+    groups.sort((x, y) => x.tier.localeCompare(y.tier)),
     [
-      { species: 'chicken', tier: 'normal', ids: ['a', 'b'] },
-      { species: 'cow', tier: 'gold', ids: ['c'] }
+      { species: 'chicken', tier: 'gold', ids: ['b'] },
+      { species: 'chicken', tier: 'normal', ids: ['a'] }
     ]
   )
+})
+
+test('handles multiple configured species independently', () => {
+  const animals = [
+    { id: 'a', species: 'chicken', tier: 'normal' },
+    { id: 'b', species: 'chicken', tier: 'gold' },
+    { id: 'c', species: 'cow', tier: 'normal' },
+    { id: 'd', species: 'cow', tier: 'gold' }
+  ]
+  const groups = groupAnimalsForAutoRelease(animals, { chicken: 'normal', cow: 'gold' }, NOW)
+  const byKey = Object.fromEntries(groups.map(g => [`${g.species}|${g.tier}`, g.ids]))
+  assert.deepEqual(byKey, {
+    'chicken|normal': ['a'],
+    'cow|normal': ['c'],
+    'cow|gold': ['d']
+  })
 })
 
 test('excludes animals that are still upgrading', () => {
@@ -35,7 +48,7 @@ test('excludes animals that are still upgrading', () => {
     { id: 'a', species: 'chicken', tier: 'normal' },
     { id: 'b', species: 'chicken', tier: 'normal', upgrade_ready_at: new Date(NOW + 60_000).toISOString() }
   ]
-  const groups = groupAnimalsForAutoRelease(animals, 'gold', NOW)
+  const groups = groupAnimalsForAutoRelease(animals, { chicken: 'gold' }, NOW)
   assert.deepEqual(groups, [{ species: 'chicken', tier: 'normal', ids: ['a'] }])
 })
 
@@ -44,11 +57,20 @@ test('treats missing tier as normal and includes finished upgrades', () => {
     { id: 'a', species: 'chicken' },
     { id: 'b', species: 'chicken', tier: 'normal', upgrade_ready_at: new Date(NOW - 1).toISOString() }
   ]
-  const groups = groupAnimalsForAutoRelease(animals, 'gold', NOW)
+  const groups = groupAnimalsForAutoRelease(animals, { chicken: 'normal' }, NOW)
   assert.deepEqual(groups, [{ species: 'chicken', tier: 'normal', ids: ['a', 'b'] }])
 })
 
-test('unknown threshold value yields no groups', () => {
+test('ignores species with an invalid configured tier', () => {
   const animals = [{ id: 'a', species: 'chicken', tier: 'normal' }]
-  assert.deepEqual(groupAnimalsForAutoRelease(animals, 'bogus', NOW), [])
+  assert.deepEqual(groupAnimalsForAutoRelease(animals, { chicken: 'bogus' }, NOW), [])
+})
+
+test('species not present in map are never released', () => {
+  const animals = [
+    { id: 'a', species: 'chicken', tier: 'normal' },
+    { id: 'b', species: 'cow', tier: 'normal' }
+  ]
+  const groups = groupAnimalsForAutoRelease(animals, { chicken: 'rainbow' }, NOW)
+  assert.deepEqual(groups, [{ species: 'chicken', tier: 'normal', ids: ['a'] }])
 })

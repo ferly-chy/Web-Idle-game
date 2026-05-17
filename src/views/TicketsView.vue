@@ -21,9 +21,10 @@ const I18N = {
     release: "🏞️ ×{qty}",
     releaseAll: "🏞️ Alle ({count})",
     releaseBusy: "Läuft...",
-    autoTitle: "🤖 Auto-Freilassen",
-    autoHint: "Tiere unter der gewählten Stufe werden automatisch freigelassen (app-weit).",
+    autoTitle: "🤖 Auto-Freilassen bis Stufe",
+    autoHint: "Diese Spezies wird bis zur gewählten Stufe automatisch freigelassen (app-weit).",
     autoOff: "Aus",
+    tierNormal: "Normal",
     tierGold: "Gold",
     tierDiamond: "Diamant",
     tierEpic: "Epic",
@@ -66,9 +67,10 @@ const I18N = {
     release: "🏞️ ×{qty}",
     releaseAll: "🏞️ All ({count})",
     releaseBusy: "Running...",
-    autoTitle: "🤖 Auto-release",
-    autoHint: "Animals below the chosen tier are released automatically (app-wide).",
+    autoTitle: "🤖 Auto-release up to tier",
+    autoHint: "This species is auto-released up to the chosen tier (app-wide).",
     autoOff: "Off",
+    tierNormal: "Normal",
     tierGold: "Gold",
     tierDiamond: "Diamond",
     tierEpic: "Epic",
@@ -111,9 +113,10 @@ const I18N = {
     release: "🏞️ ×{qty}",
     releaseAll: "🏞️ Все ({count})",
     releaseBusy: "Процесс...",
-    autoTitle: "🤖 Авто-освобождение",
-    autoHint: "Животные ниже выбранного тира освобождаются автоматически (по всему приложению).",
+    autoTitle: "🤖 Авто-освобождение до тира",
+    autoHint: "Этот вид автоматически освобождается до выбранного тира (по всему приложению).",
     autoOff: "Выкл",
+    tierNormal: "Обычный",
     tierGold: "Голд",
     tierDiamond: "Алмаз",
     tierEpic: "Эпик",
@@ -470,7 +473,7 @@ onUnmounted(() => {
                 :class="{ active: releaseSpecies === g.species }"
                 @click="releaseSpecies = g.species; releaseTier = ''"
               >
-                {{ g.info.emoji }}
+                {{ g.info.emoji }}<sup v-if="game.autoReleaseMap[g.species]" class="tb">🤖</sup>
               </Button>
             </div>
           </div>
@@ -519,21 +522,21 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="fm-row auto-rel">
+          <div v-if="releaseSpecies" class="fm-row auto-rel">
             <label class="hint" style="margin:0">{{ tx("autoTitle") }}</label>
             <div class="fusion-tiers">
               <Button
                 class="fusion-sp"
-                :class="{ active: game.autoReleaseTier === '' }"
-                @click="game.setAutoReleaseTier('')"
+                :class="{ active: !game.autoReleaseMap[releaseSpecies] }"
+                @click="game.setAutoReleaseSpecies(releaseSpecies, '')"
               >{{ tx("autoOff") }}</Button>
               <Button
-                v-for="opt in ['gold','diamond','epic','rainbow']"
+                v-for="opt in ['normal','gold','diamond','epic','rainbow']"
                 :key="opt"
                 class="fusion-sp"
-                :class="{ active: game.autoReleaseTier === opt }"
-                @click="game.setAutoReleaseTier(opt)"
-              >{{ tx(opt === 'gold' ? 'tierGold' : opt === 'diamond' ? 'tierDiamond' : opt === 'epic' ? 'tierEpic' : 'tierRainbow') }}</Button>
+                :class="{ active: game.autoReleaseMap[releaseSpecies] === opt }"
+                @click="game.setAutoReleaseSpecies(releaseSpecies, opt)"
+              >{{ tx(opt === 'normal' ? 'tierNormal' : opt === 'gold' ? 'tierGold' : opt === 'diamond' ? 'tierDiamond' : opt === 'epic' ? 'tierEpic' : 'tierRainbow') }}</Button>
             </div>
             <p class="hint" style="margin:2px 0 0">{{ tx("autoHint") }}</p>
           </div>

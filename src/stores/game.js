@@ -43,7 +43,7 @@ export const useGameStore = defineStore('game', {
     bossPathMaxStage: 20,
     eventSchedule: {},
     craftJob: null,
-    autoReleaseTier: '',
+    autoReleaseMap: {},
     _autoReleasing: false
   }),
   getters: {
@@ -274,9 +274,16 @@ export const useGameStore = defineStore('game', {
       this.loadEventSchedule().catch(() => {})
       this.loadCraftStatus().catch(() => {})
       try {
-        const v = localStorage.getItem('autoReleaseTier:' + auth.user.id) || ''
-        this.autoReleaseTier = ['', 'gold', 'diamond', 'epic', 'rainbow'].includes(v) ? v : ''
-      } catch { this.autoReleaseTier = '' }
+        const raw = JSON.parse(localStorage.getItem('autoReleaseMap:' + auth.user.id) || '{}')
+        const valid = ['normal', 'gold', 'diamond', 'epic', 'rainbow']
+        const clean = {}
+        if (raw && typeof raw === 'object') {
+          for (const [sp, tier] of Object.entries(raw)) {
+            if (valid.includes(tier)) clean[sp] = tier
+          }
+        }
+        this.autoReleaseMap = clean
+      } catch { this.autoReleaseMap = {} }
       this.autoReleaseSweep().catch(() => {})
       this.lastLoadedAt = Date.now()
     },
@@ -710,8 +717,9 @@ export const useGameStore = defineStore('game', {
     },
     async autoReleaseSweep() {
       const auth = useAuthStore()
-      if (!auth.user || !this.autoReleaseTier || this._autoReleasing) return
-      const groups = groupAnimalsForAutoRelease(this.animals, this.autoReleaseTier, Date.now())
+      if (!auth.user || this._autoReleasing) return
+      if (!this.autoReleaseMap || Object.keys(this.autoReleaseMap).length === 0) return
+      const groups = groupAnimalsForAutoRelease(this.animals, this.autoReleaseMap, Date.now())
       if (groups.length === 0) return
       this._autoReleasing = true
       try {
@@ -736,12 +744,19 @@ export const useGameStore = defineStore('game', {
         this._autoReleasing = false
       }
     },
-    setAutoReleaseTier(v) {
+    setAutoReleaseSpecies(species, maxTier) {
       const auth = useAuthStore()
-      const next = ['', 'gold', 'diamond', 'epic', 'rainbow'].includes(v) ? v : ''
-      this.autoReleaseTier = next
+      if (!species) return
+      const valid = ['normal', 'gold', 'diamond', 'epic', 'rainbow']
+      const map = { ...this.autoReleaseMap }
+      if (valid.includes(maxTier)) {
+        map[species] = maxTier
+      } else {
+        delete map[species]
+      }
+      this.autoReleaseMap = map
       try {
-        if (auth.user) localStorage.setItem('autoReleaseTier:' + auth.user.id, next)
+        if (auth.user) localStorage.setItem('autoReleaseMap:' + auth.user.id, JSON.stringify(map))
       } catch { /* localStorage nicht verfuegbar */ }
       this.autoReleaseSweep().catch(() => {})
     },

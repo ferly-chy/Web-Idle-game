@@ -5,15 +5,17 @@ function isUpgrading(a, now) {
   return new Date(a.upgrade_ready_at).getTime() > now
 }
 
-export function groupAnimalsForAutoRelease(animals, thresholdTier, now = Date.now()) {
-  const threshold = TIER_ORDER[thresholdTier]
-  if (threshold == null || threshold <= 0) return []
+export function groupAnimalsForAutoRelease(animals, autoReleaseMap, now = Date.now()) {
+  const cfg = autoReleaseMap || {}
   const map = new Map()
   for (const a of animals || []) {
     if (isUpgrading(a, now)) continue
+    const maxTier = cfg[a.species]
+    const maxRank = TIER_ORDER[maxTier]
+    if (maxRank == null) continue
     const tier = a.tier || 'normal'
     const rank = TIER_ORDER[tier]
-    if (rank == null || rank >= threshold) continue
+    if (rank == null || rank > maxRank) continue
     const key = `${a.species}|${tier}`
     if (!map.has(key)) map.set(key, { species: a.species, tier, ids: [] })
     map.get(key).ids.push(a.id)
