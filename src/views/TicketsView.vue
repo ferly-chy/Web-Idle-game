@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useGameStore } from "../stores/game";
-import { speciesInfo, tierInfo, isUpgrading, formatCoins, animalRate } from "../animals";
+import { SPECIES, speciesInfo, tierInfo, isUpgrading, formatCoins, animalRate } from "../animals";
 import { locale } from "../i18n";
 import { useReturnRefresh } from "../composables/useReturnRefresh";
 
@@ -16,6 +16,7 @@ const I18N = {
       "Lass ein Tier frei und erhalte Tickets (Hälfte des Münzwerts, Tier-Multiplikator gilt). Nicht für Tiere die gerade upgraden.",
     releasePickSpecies: "Wähle Spezies & Stufe",
     releaseNone: "Keine freilassbaren Tiere vorhanden.",
+    releaseNotOwned: "Du besitzt aktuell keine dieser Spezies — Auto-Freilassen kannst du trotzdem einstellen.",
     releaseInput: "🎯 Tier",
     releaseOutput: "✨ Tickets",
     release: "🏞️ ×{qty}",
@@ -62,6 +63,7 @@ const I18N = {
       "Release an animal for tickets (half its coin cost, tier multiplier applies). Animals that are upgrading can't be released.",
     releasePickSpecies: "Choose species & tier",
     releaseNone: "No releasable animals.",
+    releaseNotOwned: "You don't own any of this species right now — you can still configure auto-release.",
     releaseInput: "🎯 Animal",
     releaseOutput: "✨ Tickets",
     release: "🏞️ ×{qty}",
@@ -108,6 +110,7 @@ const I18N = {
       "Отпусти животное и получи тикеты (половина стоимости в монетах, с учётом тир-множителя). Животных в апгрейде отпустить нельзя.",
     releasePickSpecies: "Выбери вид и тир",
     releaseNone: "Нет животных для освобождения.",
+    releaseNotOwned: "Сейчас у тебя нет животных этого вида — авто-освобождение всё равно можно настроить.",
     releaseInput: "🎯 Животное",
     releaseOutput: "✨ Тикеты",
     release: "🏞️ ×{qty}",
@@ -195,13 +198,17 @@ const groups = computed(() => {
 });
 
 const uniqueSpecies = computed(() => {
-  const seen = new Set();
-  const arr = [];
-  for (const g of groups.value) {
-    if (seen.has(g.species)) continue;
-    seen.add(g.species);
-    arr.push(g);
-  }
+  const owned = new Set(groups.value.map((g) => g.species));
+  const arr = Object.keys(SPECIES).map((key) => ({
+    species: key,
+    info: speciesInfo(key),
+    owned: owned.has(key)
+  }));
+  arr.sort(
+    (a, b) =>
+      (b.owned ? 1 : 0) - (a.owned ? 1 : 0) ||
+      (a.info.cost || 0) - (b.info.cost || 0)
+  );
   return arr;
 });
 
@@ -426,12 +433,7 @@ onUnmounted(() => {
       <p v-if="releaseError" class="error" style="text-align:center;margin:0 0 6px">{{ releaseError }}</p>
       <p v-if="releaseSuccess" class="success" style="text-align:center;margin:0 0 6px">{{ releaseSuccess }}</p>
 
-      <div v-if="groups.length === 0" class="hint" style="text-align:center;padding:12px">
-        {{ tx("releaseNone") }}
-      </div>
-
-      <template v-else>
-        <div class="fusion-machine">
+      <div v-if="groups.length" class="fusion-machine">
           <div class="fm-slot">
             <div class="fm-slot-title">{{ tx("releaseInput") }}</div>
             <div class="fm-slot-body">
@@ -470,7 +472,7 @@ onUnmounted(() => {
                 v-for="g in uniqueSpecies"
                 :key="g.species"
                 class="fusion-sp"
-                :class="{ active: releaseSpecies === g.species }"
+                :class="{ active: releaseSpecies === g.species, 'not-owned': !g.owned }"
                 @click="releaseSpecies = g.species; releaseTier = ''"
               >
                 {{ g.info.emoji }}<sup v-if="game.autoReleaseMap[g.species]" class="tb">🤖</sup>
@@ -478,7 +480,11 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="releaseSpecies" class="fm-row">
+          <div v-if="releaseSpecies && !tiersForSpecies.length" class="hint" style="margin:0">
+            {{ tx("releaseNotOwned") }}
+          </div>
+
+          <div v-if="releaseSpecies && tiersForSpecies.length" class="fm-row">
             <label class="hint" style="margin:0">{{ tx("tier") }}</label>
             <div class="fusion-tiers">
               <Button
@@ -558,7 +564,6 @@ onUnmounted(() => {
             </Button>
           </div>
         </div>
-      </template>
     </div>
 
     <!-- Ticket Shop -->
@@ -807,6 +812,8 @@ onUnmounted(() => {
   border-color: var(--tier-color, var(--accent, #ffd166)) !important;
   background: rgba(255, 209, 102, 0.12) !important;
 }
+.fusion-sp.not-owned { opacity: 0.45; }
+.fusion-sp.not-owned.active { opacity: 1; }
 .fusion-sp small { font-size: 12px; opacity: 0.75; }
 .tb { font-size: 14px; margin-left: 2px; }
 .btn.full { width: 100%; }
