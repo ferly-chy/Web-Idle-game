@@ -640,7 +640,7 @@ function goToTickets() {
           ⏰ {{ t("shop.disappeared") }}
         </div>
         <div class="animal-cost">🪙 {{ formatCoins(s.info.cost) }}</div>
-        <div v-if="s.autoSell" class="autosell-chip">🤖 {{ t("shop.autoSellBadge") }}</div>
+        <div v-if="s.autoSell" class="autosell-chip">{{ t("shop.autoSellBadge") }}</div>
         <Button
           v-if="s.inStock"
           class="btn full"
