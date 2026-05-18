@@ -166,3 +166,145 @@ end $$;
 
 revoke all on function public.mo_list_rooms(uuid) from public, anon, authenticated;
 grant execute on function public.mo_list_rooms(uuid) to service_role;
+
+-- Beitreten: Passwort pruefen, Kapazitaet pruefen, freien Sitz vergeben.
+create or replace function public.mo_join_room(
+  p_user_id uuid,
+  p_room_id uuid,
+  p_password text default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_room public.mem_online_rooms%rowtype;
+  v_count int;
+  v_seat int;
+  v_exists boolean;
+begin
+  if p_user_id is null then raise exception 'missing user'; end if;
+
+  select * into v_room from public.mem_online_rooms
+   where id = p_room_id for update;
+  if not found then raise exception 'room not found'; end if;
+  if v_room.status <> 'lobby' then raise exception 'game already started'; end if;
+
+  select exists(
+    select 1 from public.mem_online_players
+     where room_id = p_room_id and user_id = p_user_id
+  ) into v_exists;
+
+  if not v_exists then
+    if v_room.has_password then
+      if p_password is null or length(p_password) = 0
+         or crypt(p_password, v_room.password_hash) <> v_room.password_hash then
+        raise exception 'wrong password';
+      end if;
+    end if;
+
+    select count(*) into v_count from public.mem_online_players
+     where room_id = p_room_id;
+    if v_count >= v_room.max_players then raise exception 'room full'; end if;
+
+    select coalesce(max(seat), 0) + 1 into v_seat
+      from public.mem_online_players where room_id = p_room_id;
+
+    insert into public.mem_online_players
+      (room_id, user_id, seat, display_name, is_host)
+    select p_room_id, p_user_id, v_seat,
+           coalesce(nullif(pr.username, ''), 'Spieler'), false
+    from public.profiles pr where pr.id = p_user_id;
+
+    update public.mem_online_rooms
+       set version = gen_random_uuid(), updated_at = now()
+     where id = p_room_id;
+  end if;
+
+  return public.mo_room_state(p_user_id, p_room_id);
+end $$;
+
+revoke all on function public.mo_join_room(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.mo_join_room(uuid, uuid, text) to service_role;
+
+-- Verlassen: im Spiel -> als verlassen markieren; in Lobby -> Sitz entfernen.
+-- Host-Wechsel auf naechsten verbleibenden Spieler; leerer Raum wird geloescht.
+create or replace function public.mo_leave_room(
+  p_user_id uuid,
+  p_room_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_room public.mem_online_rooms%rowtype;
+  v_was_host boolean;
+  v_remaining int;
+  v_new_host uuid;
+  v_active int;
+begin
+  if p_user_id is null then raise exception 'missing user'; end if;
+
+  select * into v_room from public.mem_online_rooms
+   where id = p_room_id for update;
+  if not found then return jsonb_build_object('left', true); end if;
+
+  select is_host into v_was_host from public.mem_online_players
+   where room_id = p_room_id and user_id = p_user_id;
+
+  if v_room.status = 'playing' then
+    update public.mem_online_players
+       set left_game = true, connected = false
+     where room_id = p_room_id and user_id = p_user_id;
+
+    select count(*) into v_active from public.mem_online_players
+     where room_id = p_room_id and left_game = false;
+    if v_active <= 1 and v_room.status = 'playing' then
+      update public.mem_online_rooms
+         set status = 'finished', turn_player_id = null,
+             turn_expires_at = null, version = gen_random_uuid(),
+             updated_at = now()
+       where id = p_room_id;
+    end if;
+  else
+    delete from public.mem_online_players
+     where room_id = p_room_id and user_id = p_user_id;
+  end if;
+
+  select count(*) into v_remaining from public.mem_online_players
+   where room_id = p_room_id;
+
+  if v_remaining = 0 then
+    delete from public.mem_online_rooms where id = p_room_id;
+    return jsonb_build_object('left', true);
+  end if;
+
+  if coalesce(v_was_host, false) then
+    select user_id into v_new_host from public.mem_online_players
+     where room_id = p_room_id and left_game = false
+     order by seat limit 1;
+    if v_new_host is null then
+      select user_id into v_new_host from public.mem_online_players
+       where room_id = p_room_id order by seat limit 1;
+    end if;
+    update public.mem_online_players set is_host = (user_id = v_new_host)
+     where room_id = p_room_id;
+    update public.mem_online_rooms
+       set host_id = v_new_host, version = gen_random_uuid(), updated_at = now()
+     where id = p_room_id;
+  else
+    update public.mem_online_rooms
+       set version = gen_random_uuid(), updated_at = now()
+     where id = p_room_id;
+  end if;
+
+  return jsonb_build_object('left', true);
+end $$;
+
+revoke all on function public.mo_leave_room(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.mo_leave_room(uuid, uuid) to service_role;

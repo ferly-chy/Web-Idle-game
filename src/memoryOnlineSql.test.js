@@ -45,3 +45,18 @@ test('mo_list_rooms exposes has_password but never password_hash, and cleans sta
   assert.match(sql, /'has_password', r\.has_password/)
   assert.doesNotMatch(sql, /'password_hash'/)
 })
+
+test('mo_join_room verifies password via crypt and enforces capacity', () => {
+  assert.match(sql, /create or replace function public\.mo_join_room/)
+  assert.match(sql, /crypt\(p_password, v_room\.password_hash\) <> v_room\.password_hash/)
+  assert.match(sql, /raise exception 'wrong password'/)
+  assert.match(sql, /raise exception 'room full'/)
+  assert.match(sql, /raise exception 'game already started'/)
+})
+
+test('mo_leave_room transfers host and deletes empty rooms', () => {
+  assert.match(sql, /create or replace function public\.mo_leave_room/)
+  assert.match(sql, /delete from public\.mem_online_rooms where id = p_room_id/)
+  assert.match(sql, /set is_host = \(user_id = v_new_host\)/)
+  assert.match(sql, /left_game = true/)
+})
