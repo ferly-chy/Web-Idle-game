@@ -8,11 +8,13 @@ import { SpeedInsights } from "@vercel/speed-insights/vue";
 import { supabase } from "./supabase";
 import { formatCoins, speciesInfo, tierInfo } from "./animals";
 import AdminModal from "./components/AdminModal.vue";
+import SupportModal from "./components/SupportModal.vue";
 import TutorialBubble from "./components/TutorialBubble.vue";
 import { t } from "./i18n";
 import { onAppResume } from "./composables/useAppResume";
 
 const adminOpen = ref(false);
+const supportOpen = ref(false);
 
 function formatDuration(sec) {
   const s = Math.max(0, Math.floor(Number(sec) || 0));
@@ -85,6 +87,7 @@ watch(
   (v, prev) => {
     if (v) {
       subscribeBroadcasts();
+      auth.loadMySupportTickets().catch(() => {});
       if (!prev) game.load().catch(() => {});
     } else if (broadcastChannel) {
       supabase.removeChannel(broadcastChannel);
@@ -107,6 +110,7 @@ onMounted(async () => {
   if (auth.isAuth) {
     await game.load();
     subscribeBroadcasts();
+    auth.loadMySupportTickets().catch(() => {});
   }
 
   // Game-Tick: 500ms reicht fuer Tickcoin-Animation, halbiert den Re-render-Overhead
@@ -150,6 +154,7 @@ onMounted(async () => {
 // Auf Android löst nur appStateChange beim Wiederöffnen aus dem Hintergrund zuverlässig aus.
 onAppResume(() => {
   refreshOnReturn();
+  if (auth.isAuth) auth.loadMySupportTickets().catch(() => {});
 });
 
 // Bei Route-Wechsel prüfen ob Daten veraltet sind
@@ -348,7 +353,18 @@ async function hardReload() {
       🛠️
     </Button>
 
+    <Button
+      v-if="showNav && auth.qualifiedSupportTickets.length"
+      class="support-fab"
+      @click="supportOpen = true"
+      :title="t('app.supportTickets')"
+    >
+      🎫
+      <span v-if="auth.hasUnseenSupportReply" class="fab-dot"></span>
+    </Button>
+
     <AdminModal v-if="adminOpen" @close="adminOpen = false" />
+    <SupportModal v-if="supportOpen" @close="supportOpen = false" />
     <SpeedInsights />
   </div>
 </template>
