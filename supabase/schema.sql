@@ -2261,6 +2261,8 @@ end $$;
 grant execute on function public.admin_reply_support_ticket(uuid, text, boolean) to authenticated;
 
 -- 8) admin_list_support_tickets: + last_user_message_at
+-- Rueckgabetyp aendert sich (neue Spalte) -> erst droppen, dann neu anlegen.
+drop function if exists public.admin_list_support_tickets(text, int, int);
 create or replace function public.admin_list_support_tickets(
   p_status text default null,
   p_limit int default 100,
