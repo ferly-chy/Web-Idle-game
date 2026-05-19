@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { locale } from '../i18n'
+import { useAuthStore } from '../stores/auth'
 import { useAppToast } from '../composables/useAppToast'
 import {
   canStartGame, sortedPlayers, boardColumns, isMyTurn, turnSecondsLeft,
@@ -11,6 +12,7 @@ import {
 
 const router = useRouter()
 const appToast = useAppToast()
+const auth = useAuthStore()
 
 const I18N = {
   de: {
@@ -18,7 +20,7 @@ const I18N = {
     refresh: 'Aktualisieren', create: 'Raum erstellen', noRooms: 'Keine offenen Räume. Erstelle einen!',
     join: 'Beitreten', players: 'Spieler', locked: 'Passwort',
     createTitle: 'Neuen Raum erstellen', roomName: 'Raumname', boardSize: 'Brettgröße',
-    small: 'Klein (8 Paare)', medium: 'Mittel (12 Paare)', large: 'Groß (18 Paare)',
+    turnSeconds: 'Sekunden pro Zug', defaultPlayer: 'Spieler', defaultRoom: '{name}s Raum',
     maxPlayers: 'Max. Spieler', optionalPw: 'Passwort (optional)',
     cancel: 'Abbrechen', createBtn: 'Erstellen', pwTitle: 'Passwort eingeben',
     pwPlaceholder: 'Raum-Passwort', errName: 'Bitte einen Raumnamen eingeben',
@@ -27,13 +29,14 @@ const I18N = {
     yourTurn: 'Du bist dran!', turnOf: '{n} ist dran', timeLeft: '{s}s',
     scores: 'Punkte', finished: 'Spiel beendet', winner: '🏆 Sieger: {n}',
     draw: 'Unentschieden', backToLobby: 'Zur Lobby',
+    connectionProblem: 'Verbindungsproblem - bitte Seite neu laden', reload: 'Neu laden',
   },
   en: {
     title: '🧠 Memory Online', back: 'Back', loading: 'Loading rooms...',
     refresh: 'Refresh', create: 'Create room', noRooms: 'No open rooms. Create one!',
     join: 'Join', players: 'Players', locked: 'Password',
     createTitle: 'Create a new room', roomName: 'Room name', boardSize: 'Board size',
-    small: 'Small (8 pairs)', medium: 'Medium (12 pairs)', large: 'Large (18 pairs)',
+    turnSeconds: 'Seconds per turn', defaultPlayer: 'Player', defaultRoom: "{name}'s Room",
     maxPlayers: 'Max players', optionalPw: 'Password (optional)',
     cancel: 'Cancel', createBtn: 'Create', pwTitle: 'Enter password',
     pwPlaceholder: 'Room password', errName: 'Please enter a room name',
@@ -42,13 +45,14 @@ const I18N = {
     yourTurn: 'Your turn!', turnOf: "{n}'s turn", timeLeft: '{s}s',
     scores: 'Scores', finished: 'Game over', winner: '🏆 Winner: {n}',
     draw: 'Draw', backToLobby: 'Back to lobby',
+    connectionProblem: 'Connection problem - please reload the page', reload: 'Reload',
   },
   ru: {
     title: '🧠 Memory Онлайн', back: 'Назад', loading: 'Загрузка комнат...',
     refresh: 'Обновить', create: 'Создать комнату', noRooms: 'Нет открытых комнат. Создай!',
     join: 'Войти', players: 'Игроки', locked: 'Пароль',
     createTitle: 'Создать комнату', roomName: 'Название', boardSize: 'Размер поля',
-    small: 'Малое (8 пар)', medium: 'Среднее (12 пар)', large: 'Большое (18 пар)',
+    turnSeconds: 'Секунд на ход', defaultPlayer: 'Игрок', defaultRoom: 'Комната {name}',
     maxPlayers: 'Макс. игроков', optionalPw: 'Пароль (необязательно)',
     cancel: 'Отмена', createBtn: 'Создать', pwTitle: 'Введите пароль',
     pwPlaceholder: 'Пароль комнаты', errName: 'Введите название комнаты',
@@ -57,6 +61,7 @@ const I18N = {
     yourTurn: 'Твой ход!', turnOf: 'Ход: {n}', timeLeft: '{s}с',
     scores: 'Очки', finished: 'Игра окончена', winner: '🏆 Победитель: {n}',
     draw: 'Ничья', backToLobby: 'В лобби',
+    connectionProblem: 'Проблема соединения - перезагрузите страницу', reload: 'Перезагрузить',
   },
 }
 function tx(key, vars = {}) {
@@ -72,14 +77,41 @@ const showPw = ref(false)
 const pwRoom = ref(null)
 const pwInput = ref('')
 const busy = ref(false)
-const form = ref({ name: '', board_pairs: 12, max_players: 4, password: '' })
-
-const sizeOptions = [
-  { label: () => tx('small'), value: 8 },
-  { label: () => tx('medium'), value: 12 },
-  { label: () => tx('large'), value: 18 },
-]
+const form = ref({ name: '', board_pairs: 12, turn_seconds: 20, max_players: 4, password: '' })
 const maxOptions = [2, 3, 4]
+const connectionProblem = ref(false)
+const consecutivePollFailures = ref(0)
+const showTurnBanner = ref(false)
+const turnBannerText = ref('')
+let turnBannerTimer = null
+let previousTurnId = null
+
+function clampInt(value, min, max, fallback) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(n)))
+}
+
+function clampCreateForm() {
+  form.value.board_pairs = clampInt(form.value.board_pairs, 2, 99, 12)
+  form.value.turn_seconds = clampInt(form.value.turn_seconds, 5, 120, 20)
+  form.value.max_players = clampInt(form.value.max_players, 2, 4, 4)
+}
+
+function defaultRoomName() {
+  const fallback = tx('defaultPlayer')
+  const name = String(auth.profile?.username || '').trim() || fallback
+  return tx('defaultRoom', { name })
+}
+
+function openCreateDialog() {
+  if (!form.value.name.trim()) form.value.name = defaultRoomName()
+  showCreate.value = true
+}
+
+watch(showCreate, (open) => {
+  if (open && !form.value.name.trim()) form.value.name = defaultRoomName()
+})
 
 async function callOnline(action, payload = {}) {
   const { data, error } = await supabase.functions.invoke('memory-online', {
@@ -96,12 +128,30 @@ async function callOnline(action, payload = {}) {
   return data
 }
 
-async function loadRooms() {
+function markOnlineSuccess() {
+  consecutivePollFailures.value = 0
+  if (navigator.onLine !== false) connectionProblem.value = false
+}
+
+function markOnlineFailure(trackConnectivity) {
+  if (!trackConnectivity) return
+  consecutivePollFailures.value += 1
+  if (consecutivePollFailures.value >= 2) connectionProblem.value = true
+}
+
+function reloadPage() {
+  window.location.reload()
+}
+
+async function loadRooms(options = {}) {
+  const trackConnectivity = options.trackConnectivity === true
   loading.value = true
   try {
     const res = await callOnline('list_rooms')
     rooms.value = Array.isArray(res?.rooms) ? res.rooms : []
+    markOnlineSuccess()
   } catch (e) {
+    markOnlineFailure(trackConnectivity)
     appToast.err(e?.message || 'Fehler')
   } finally {
     loading.value = false
@@ -109,12 +159,14 @@ async function loadRooms() {
 }
 
 async function submitCreate() {
+  clampCreateForm()
   if (!form.value.name.trim()) { appToast.err(tx('errName')); return }
   busy.value = true
   try {
     const res = await callOnline('create_room', {
       name: form.value.name.trim(),
       board_pairs: form.value.board_pairs,
+      turn_seconds: form.value.turn_seconds,
       max_players: form.value.max_players,
       password: form.value.password || null,
     })
@@ -155,11 +207,14 @@ function rememberRoom(id) {
 
 function roomId() { return roomState.value?.room_id }
 
-async function refreshRoom() {
+async function refreshRoom(options = {}) {
   if (!roomId()) return
+  const trackConnectivity = options.trackConnectivity === true
   try {
     roomState.value = await callOnline('room_state', { room_id: roomId() })
+    markOnlineSuccess()
   } catch (e) {
+    markOnlineFailure(trackConnectivity)
     appToast.err(e?.message || 'Fehler')
   }
 }
@@ -242,6 +297,46 @@ const winnerName = computed(() => {
   return p ? p.display_name : ''
 })
 
+function playerName(userId) {
+  const p = (roomState.value?.players || []).find((x) => x.user_id === userId)
+  return p ? p.display_name : ''
+}
+
+function hideTurnBanner() {
+  if (turnBannerTimer) clearTimeout(turnBannerTimer)
+  turnBannerTimer = null
+  showTurnBanner.value = false
+}
+
+function triggerTurnBanner(turnId) {
+  if (turnBannerTimer) clearTimeout(turnBannerTimer)
+  turnBannerText.value = turnId === roomState.value?.me
+    ? tx('yourTurn')
+    : tx('turnOf', { n: playerName(turnId) })
+  showTurnBanner.value = true
+  turnBannerTimer = setTimeout(() => {
+    showTurnBanner.value = false
+    turnBannerTimer = null
+  }, 2000)
+}
+
+watch(
+  () => ({ turnId: roomState.value?.turn_player_id || null, status: roomState.value?.status || null }),
+  ({ turnId, status }, oldValue) => {
+    if (status !== 'playing' || !turnId) {
+      previousTurnId = null
+      hideTurnBanner()
+      return
+    }
+    const enteredPlaying = !oldValue || oldValue.status !== 'playing'
+    if (enteredPlaying || turnId !== previousTurnId) {
+      previousTurnId = turnId
+      triggerTurnBanner(turnId)
+    }
+  },
+  { flush: 'post' },
+)
+
 async function flipCard(index) {
   if (busy.value || !myTurn.value) return
   if (cardMap.value[index]) return
@@ -271,14 +366,26 @@ async function maybeSkip() {
 }
 
 let poll = null
+function handleOffline() {
+  connectionProblem.value = true
+}
+
+function handleOnline() {
+  if (roomState.value) refreshRoom({ trackConnectivity: true })
+  else loadRooms({ trackConnectivity: true })
+}
+
 onMounted(async () => {
+  window.addEventListener('offline', handleOffline)
+  window.addEventListener('online', handleOnline)
+  if (navigator.onLine === false) connectionProblem.value = true
   await loadRooms()
   await restoreRoom()
   // Selbst-Aktualisierung alle 10s: im Raum als Realtime-Fallback,
-  // sonst die Lobby-Liste. Kein manuelles Aktualisieren noetig.
+  // sonst die Lobby-Liste. Kein manuelles Aktualisieren nötig.
   poll = setInterval(() => {
-    if (roomState.value) refreshRoom()
-    else loadRooms()
+    if (roomState.value) refreshRoom({ trackConnectivity: true })
+    else loadRooms({ trackConnectivity: true })
   }, 10000)
   clock = setInterval(() => {
     nowMs.value = Date.now()
@@ -288,12 +395,20 @@ onMounted(async () => {
 onUnmounted(() => {
   if (poll) clearInterval(poll)
   if (clock) clearInterval(clock)
+  hideTurnBanner()
+  window.removeEventListener('offline', handleOffline)
+  window.removeEventListener('online', handleOnline)
   if (channel) supabase.removeChannel(channel)
 })
 </script>
 
 <template>
   <div class="mo-view">
+    <div v-if="connectionProblem" class="mo-connection-banner">
+      <span>{{ tx('connectionProblem') }}</span>
+      <Button class="btn small" @click="reloadPage">{{ tx('reload') }}</Button>
+    </div>
+
     <header class="mo-header">
       <Button class="btn small btn-ghost" @click="router.push('/memory')">
         <i class="pi pi-arrow-left"></i><span>{{ tx('back') }}</span>
@@ -305,7 +420,7 @@ onUnmounted(() => {
     </header>
 
     <div v-if="!roomState">
-      <Button class="btn mo-create-btn" @click="showCreate = true">
+      <Button class="btn mo-create-btn" @click="openCreateDialog">
         <i class="pi pi-plus"></i><span>{{ tx('create') }}</span>
       </Button>
 
@@ -391,16 +506,24 @@ onUnmounted(() => {
     </div>
 
     <Teleport to="body">
+      <div v-if="showTurnBanner" class="mo-turn-banner">
+        {{ turnBannerText }}
+      </div>
+
       <div v-if="showCreate" class="mo-backdrop" @click.self="showCreate = false">
         <div class="mo-dialog card">
           <h3>{{ tx('createTitle') }}</h3>
           <label class="mo-label">{{ tx('roomName') }}</label>
           <InputText v-model="form.name" maxlength="40" class="mo-input" />
           <label class="mo-label">{{ tx('boardSize') }}</label>
-          <Select
-            v-model="form.board_pairs"
-            :options="sizeOptions.map((o) => ({ label: o.label(), value: o.value }))"
-            optionLabel="label" optionValue="value" class="mo-input"
+          <InputText
+            v-model.number="form.board_pairs" type="number" inputmode="numeric"
+            min="2" max="99" step="1" class="mo-input" @blur="clampCreateForm"
+          />
+          <label class="mo-label">{{ tx('turnSeconds') }}</label>
+          <InputText
+            v-model.number="form.turn_seconds" type="number" inputmode="numeric"
+            min="5" max="120" step="1" class="mo-input" @blur="clampCreateForm"
           />
           <label class="mo-label">{{ tx('maxPlayers') }}</label>
           <Select v-model="form.max_players" :options="maxOptions" class="mo-input" />
@@ -432,6 +555,11 @@ onUnmounted(() => {
 
 <style scoped>
 .mo-view { display:flex; flex-direction:column; gap:12px; padding-bottom:18px; }
+.mo-connection-banner { position:fixed; top:0; left:0; right:0; z-index:900;
+  display:flex; align-items:center; justify-content:center; gap:12px; padding:10px 14px;
+  background:rgba(120,28,28,0.96); color:white; font-weight:900;
+  box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+.mo-connection-banner .btn { min-height:32px; padding:6px 10px; background:rgba(255,255,255,0.16); }
 .mo-header { display:flex; align-items:center; gap:10px; }
 .btn-ghost { background:rgba(255,255,255,0.06); color:var(--muted);
   display:inline-flex; align-items:center; gap:5px; flex-shrink:0; }
@@ -479,6 +607,10 @@ onUnmounted(() => {
 .mo-turn { font-weight:900; font-size:15px; color:var(--muted);
   display:flex; align-items:center; gap:8px; }
 .mo-turn.mine { color:var(--accent); }
+.mo-turn-banner { position:fixed; inset:0; z-index:850; pointer-events:none;
+  display:flex; align-items:center; justify-content:center; padding:24px;
+  color:var(--accent); font-size:clamp(34px,8vw,76px); font-weight:1000;
+  text-align:center; text-shadow:0 3px 18px rgba(0,0,0,0.65); }
 .mo-timer { font-variant-numeric:tabular-nums; font-size:13px;
   padding:2px 8px; border-radius:999px; background:rgba(255,255,255,0.08); }
 .mo-scores { display:flex; flex-wrap:wrap; gap:10px; font-size:13px;
