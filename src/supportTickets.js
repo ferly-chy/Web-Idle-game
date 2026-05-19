@@ -24,3 +24,24 @@ export function buildSeenMap(tickets, seenMap = {}, now = Date.now()) {
   }
   return next
 }
+
+export function hasUnseenAdminMessage(tickets, seenMap = {}) {
+  const list = Array.isArray(tickets) ? tickets : []
+  const map = seenMap || {}
+  return list.some((t) => t && t.last_user_message_at && map[t.id] !== t.last_user_message_at)
+}
+
+export function buildAdminSeenMap(tickets, seenMap = {}) {
+  const list = Array.isArray(tickets) ? tickets : []
+  const next = { ...(seenMap || {}) }
+  for (const t of list) {
+    if (t && t.last_user_message_at) next[t.id] = t.last_user_message_at
+  }
+  return next
+}
+
+export function isUnansweredForDigest(ticket, latestMessage, now = Date.now()) {
+  if (!ticket || ticket.status !== 'open' || ticket.reminder_sent_at) return false
+  if (!latestMessage || latestMessage.sender !== 'user' || !latestMessage.created_at) return false
+  return now - new Date(latestMessage.created_at).getTime() >= 24 * 3600 * 1000
+}
