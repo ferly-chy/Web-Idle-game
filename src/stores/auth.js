@@ -2,7 +2,10 @@ import { defineStore } from 'pinia'
 import { Capacitor } from '@capacitor/core'
 import { supabase, AUTH_REDIRECT_URL } from '../supabase'
 import { t } from '../i18n'
-import { qualifySupportTickets, hasUnseenReply, buildSeenMap } from '../supportTickets'
+import {
+  qualifySupportTickets, hasUnseenReply, buildSeenMap,
+  hasUnseenAdminMessage, buildAdminSeenMap
+} from '../supportTickets'
 
 const SEEN_KEY = 'seenSupportReplies'
 function readSeenMap() {
@@ -10,6 +13,13 @@ function readSeenMap() {
 }
 function writeSeenMap(map) {
   try { localStorage.setItem(SEEN_KEY, JSON.stringify(map || {})) } catch {}
+}
+const ADMIN_SEEN_KEY = 'seenAdminTicketMsgs'
+function readAdminSeenMap() {
+  try { return JSON.parse(localStorage.getItem(ADMIN_SEEN_KEY)) || {} } catch { return {} }
+}
+function writeAdminSeenMap(map) {
+  try { localStorage.setItem(ADMIN_SEEN_KEY, JSON.stringify(map || {})) } catch {}
 }
 
 // Native: OAuth-URL holen, im System-Browser/Custom-Tab öffnen,
@@ -31,7 +41,9 @@ export const useAuthStore = defineStore('auth', {
     profile: null,
     identities: [],
     loading: true,
-    mySupportTickets: []
+    mySupportTickets: [],
+    ticketThreads: {},
+    adminSupportTickets: []
   }),
   getters: {
     user: (s) => s.session?.user || null,
@@ -39,7 +51,8 @@ export const useAuthStore = defineStore('auth', {
     hasGoogleLinked: (s) => (s.identities || []).some((i) => i.provider === 'google'),
     canUnlinkGoogle: (s) => (s.identities || []).some((i) => i.provider === 'google'),
     qualifiedSupportTickets: (s) => qualifySupportTickets(s.mySupportTickets, Date.now()),
-    hasUnseenSupportReply: (s) => hasUnseenReply(s.mySupportTickets, readSeenMap(), Date.now())
+    hasUnseenSupportReply: (s) => hasUnseenReply(s.mySupportTickets, readSeenMap(), Date.now()),
+    hasUnseenAdminSupport: (s) => hasUnseenAdminMessage(s.adminSupportTickets, readAdminSeenMap())
   },
   actions: {
     async init() {
@@ -218,6 +231,37 @@ export const useAuthStore = defineStore('auth', {
     },
     markSupportRepliesSeen() {
       writeSeenMap(buildSeenMap(this.mySupportTickets, readSeenMap(), Date.now()))
+    },
+    async loadTicketThread(ticketId) {
+      const { data, error } = await supabase
+        .from('support_ticket_messages')
+        .select('id, sender, body, created_at')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true })
+      if (error) { console.error(error); return }
+      this.ticketThreads = { ...this.ticketThreads, [ticketId]: data || [] }
+    },
+    async replyToTicket(ticketId, body) {
+      const { error } = await supabase.rpc('user_reply_support_ticket', {
+        p_ticket_id: ticketId,
+        p_body: body
+      })
+      if (error) throw error
+      await this.loadTicketThread(ticketId)
+      await this.loadMySupportTickets()
+    },
+    async loadAdminSupportOverview() {
+      if (!this.session) return
+      const isAdm = this.profile?.is_admin || this.profile?.is_subadmin
+      if (!isAdm) return
+      const { data, error } = await supabase.rpc('admin_list_support_tickets', {
+        p_status: null, p_limit: 100, p_offset: 0
+      })
+      if (error) { console.error(error); return }
+      this.adminSupportTickets = data || []
+    },
+    markAdminMessagesSeen() {
+      writeAdminSeenMap(buildAdminSeenMap(this.adminSupportTickets, readAdminSeenMap()))
     },
     async sendBroadcast(message) {
       const { data, error } = await supabase.rpc('admin_broadcast', { p_message: message })
