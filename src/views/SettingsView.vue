@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { localePreference, setLocale, t, LOCALE_OPTIONS } from '../i18n'
+import { animationsEnabled } from '../composables/useAnimations'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -239,6 +240,19 @@ async function logout() {
     </section>
 
     <section class="card stack">
+      <h2 style="margin:0">{{ t('settings.animationsTitle') }}</h2>
+      <p class="hint">{{ t('settings.animationsHint') }}</p>
+      <label class="row settings-toggle">
+        <Checkbox
+          v-model="animationsEnabled"
+          :binary="true"
+          inputId="animations-enabled"
+        />
+        <span>{{ t('settings.animationsLabel') }}</span>
+      </label>
+    </section>
+
+    <section class="card stack">
       <h2 style="margin:0">{{ t('settings.account') }}</h2>
       <div class="row">
         <span>{{ t('settings.avatar') }}:</span>
@@ -395,6 +409,7 @@ async function logout() {
 .linked-ok { color: #3a8; }
 .linked-no { color: #e90; }
 .account-actions { justify-content: flex-start; gap: 8px; }
+.settings-toggle,
 .friend-request-toggle {
   justify-content: flex-start;
   align-items: center;
