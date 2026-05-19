@@ -261,6 +261,14 @@ input:focus { border-color: var(--accent); }
   background: #ff4d4f;
   border: 2px solid #0b1220;
 }
+.admin-fab .fab-dot-blue {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #0b1220;
+}
 
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);

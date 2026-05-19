@@ -88,6 +88,7 @@ watch(
     if (v) {
       subscribeBroadcasts();
       auth.loadMySupportTickets().catch(() => {});
+      auth.loadAdminSupportOverview().catch(() => {});
       if (!prev) game.load().catch(() => {});
     } else if (broadcastChannel) {
       supabase.removeChannel(broadcastChannel);
@@ -111,6 +112,7 @@ onMounted(async () => {
     await game.load();
     subscribeBroadcasts();
     auth.loadMySupportTickets().catch(() => {});
+    auth.loadAdminSupportOverview().catch(() => {});
   }
 
   // Game-Tick: 500ms reicht fuer Tickcoin-Animation, halbiert den Re-render-Overhead
@@ -154,7 +156,10 @@ onMounted(async () => {
 // Auf Android löst nur appStateChange beim Wiederöffnen aus dem Hintergrund zuverlässig aus.
 onAppResume(() => {
   refreshOnReturn();
-  if (auth.isAuth) auth.loadMySupportTickets().catch(() => {});
+  if (auth.isAuth) {
+    auth.loadMySupportTickets().catch(() => {});
+    auth.loadAdminSupportOverview().catch(() => {});
+  }
 });
 
 // Bei Route-Wechsel prüfen ob Daten veraltet sind
@@ -351,6 +356,7 @@ async function hardReload() {
       :title="t('app.admin')"
     >
       🛠️
+      <span v-if="auth.hasUnseenAdminSupport" class="fab-dot-blue"></span>
     </Button>
 
     <Button
