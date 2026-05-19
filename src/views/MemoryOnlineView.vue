@@ -83,6 +83,8 @@ const connectionProblem = ref(false)
 const consecutivePollFailures = ref(0)
 const showTurnBanner = ref(false)
 const turnBannerText = ref('')
+const turnBannerMine = ref(false)
+const turnBannerSeq = ref(0)
 let turnBannerTimer = null
 let previousTurnId = null
 
@@ -310,9 +312,11 @@ function hideTurnBanner() {
 
 function triggerTurnBanner(turnId) {
   if (turnBannerTimer) clearTimeout(turnBannerTimer)
-  turnBannerText.value = turnId === roomState.value?.me
+  turnBannerMine.value = turnId === roomState.value?.me
+  turnBannerText.value = turnBannerMine.value
     ? tx('yourTurn')
     : tx('turnOf', { n: playerName(turnId) })
+  turnBannerSeq.value += 1
   showTurnBanner.value = true
   turnBannerTimer = setTimeout(() => {
     showTurnBanner.value = false
@@ -478,7 +482,7 @@ onUnmounted(() => {
           {{ p.display_name }}: <b>{{ p.score }}</b>
         </span>
       </div>
-      <div class="memory-board"
+      <div class="memory-board" :class="{ 'my-turn': myTurn }"
            :style="{ gridTemplateColumns: 'repeat(' + columns + ', minmax(0, 1fr))' }">
         <button v-for="i in cardCount" :key="i - 1" class="memory-card"
                 :class="{ flipped: !!cardMap[i - 1], matched: cardMap[i - 1]?.matched }"
@@ -506,8 +510,8 @@ onUnmounted(() => {
     </div>
 
     <Teleport to="body">
-      <div v-if="showTurnBanner" class="mo-turn-banner">
-        {{ turnBannerText }}
+      <div v-if="showTurnBanner" class="mo-turn-banner" :class="{ mine: turnBannerMine }">
+        <span :key="turnBannerSeq" class="mo-turn-banner-text">{{ turnBannerText }}</span>
       </div>
 
       <div v-if="showCreate" class="mo-backdrop" @click.self="showCreate = false">
@@ -609,8 +613,25 @@ onUnmounted(() => {
 .mo-turn.mine { color:var(--accent); }
 .mo-turn-banner { position:fixed; inset:0; z-index:850; pointer-events:none;
   display:flex; align-items:center; justify-content:center; padding:24px;
-  color:var(--accent); font-size:clamp(34px,8vw,76px); font-weight:1000;
-  text-align:center; text-shadow:0 3px 18px rgba(0,0,0,0.65); }
+  color:#ff3b3b; font-size:clamp(34px,8vw,76px); font-weight:1000;
+  text-align:center; }
+.mo-turn-banner.mine { color:var(--accent); }
+.mo-turn-banner-text { display:inline-block; will-change:transform,opacity;
+  text-shadow:0 3px 18px rgba(0,0,0,0.65), 0 0 26px currentColor;
+  animation:mo-turn-pop 2s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes mo-turn-pop {
+  0%   { opacity:0; transform:scale(0.55) translateY(14px); }
+  14%  { opacity:1; transform:scale(1.16) translateY(0); }
+  24%  { transform:scale(0.97); }
+  32%  { transform:scale(1.04); }
+  40%  { transform:scale(1); }
+  78%  { opacity:1; transform:scale(1); }
+  100% { opacity:0; transform:scale(1.14); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .mo-turn-banner-text { animation:mo-turn-fade 2s ease both; }
+  @keyframes mo-turn-fade { 0%,80% { opacity:1; } 100% { opacity:0; } }
+}
 .mo-timer { font-variant-numeric:tabular-nums; font-size:13px;
   padding:2px 8px; border-radius:999px; background:rgba(255,255,255,0.08); }
 .mo-scores { display:flex; flex-wrap:wrap; gap:10px; font-size:13px;
@@ -619,7 +640,21 @@ onUnmounted(() => {
 .mo-scores .left { opacity:0.5; text-decoration:line-through; }
 .memory-board { display:grid; gap:8px; padding:10px; border-radius:18px;
   background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(0,0,0,0.15)),#0d1528;
-  border:1px solid var(--border); box-shadow:inset 0 0 28px rgba(0,0,0,0.35); }
+  border:1px solid var(--border); box-shadow:inset 0 0 28px rgba(0,0,0,0.35);
+  transition:border-color 0.25s ease, box-shadow 0.25s ease; }
+.memory-board.my-turn { border-color:#ffd400;
+  box-shadow:inset 0 0 28px rgba(0,0,0,0.35),
+    0 0 0 2px #ffd400, 0 0 22px rgba(255,212,0,0.85), 0 0 44px rgba(255,212,0,0.5);
+  animation:mo-board-glow 1.4s ease-in-out infinite; }
+@keyframes mo-board-glow {
+  0%,100% { box-shadow:inset 0 0 28px rgba(0,0,0,0.35),
+    0 0 0 2px #ffd400, 0 0 18px rgba(255,212,0,0.7), 0 0 36px rgba(255,212,0,0.4); }
+  50%     { box-shadow:inset 0 0 28px rgba(0,0,0,0.35),
+    0 0 0 3px #ffe34d, 0 0 30px rgba(255,212,0,1), 0 0 60px rgba(255,212,0,0.65); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .memory-board.my-turn { animation:none; }
+}
 .memory-card { aspect-ratio:1; border:none; padding:0; background:transparent;
   perspective:600px; cursor:pointer; }
 .memory-card:disabled { cursor:default; }
