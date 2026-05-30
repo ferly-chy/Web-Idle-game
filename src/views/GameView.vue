@@ -75,7 +75,6 @@ const I18N = {
       animals: "{count} Tiere",
       animalsFood: "Tiere & Futter",
       tickets: "Tickets",
-      merge: "Merge",
       memory: "Memory",
       release: "Tier freilassen"
     },
@@ -143,10 +142,6 @@ const I18N = {
       stage: "Etappe {n} / {total}",
       bossBoostActive: "👑 Boss-Boost"
     },
-    mergeLink: {
-      title: "🐾 Merge-Safari",
-      sub: "Fusioniere Tiere, erreiche Meilensteine & erhalte Truhen"
-    },
     memoryLink: {
       title: "🧠 Memory",
       sub: "Tier-Paare finden, Level schaffen & Truhen verdienen"
@@ -207,7 +202,6 @@ const I18N = {
       animals: "{count} animals",
       animalsFood: "Animals & Food",
       tickets: "Tickets",
-      merge: "Merge",
       memory: "Memory",
       release: "Release pet"
     },
@@ -275,10 +269,6 @@ const I18N = {
       stage: "Stage {n} / {total}",
       bossBoostActive: "👑 Boss Boost"
     },
-    mergeLink: {
-      title: "🐾 Merge Safari",
-      sub: "Merge animals, reach milestones & earn chests"
-    },
     memoryLink: {
       title: "🧠 Memory",
       sub: "Find animal pairs, clear levels & earn chests"
@@ -339,7 +329,6 @@ const I18N = {
       animals: "{count} животных",
       animalsFood: "Животные и еда",
       tickets: "Тикеты",
-      merge: "Merge",
       memory: "Memory",
       release: "Отпустить питомца"
     },
@@ -406,10 +395,6 @@ const I18N = {
       sub: "Путь босса ({total} этапов) и эндлесс-челлендж",
       stage: "Этап {n} / {total}",
       bossBoostActive: "👑 Босс-Буст"
-    },
-    mergeLink: {
-      title: "🐾 Merge-Сафари",
-      sub: "Объединяй животных, достигай этапов и получай сундуки"
     },
     memoryLink: {
       title: "🧠 Memory",
@@ -600,11 +585,6 @@ function fmtCountdown(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-const mergeRemaining = computed(() => {
-  void now.value;
-  return Math.max(0, game.mergeEndsAt - Date.now());
-});
-const mergeEnded = computed(() => game.mergeShowCountdown && (mergeRemaining.value <= 0 || !game.mergeActive));
 const memoryRemaining = computed(() => {
   void now.value;
   return Math.max(0, game.memoryEndsAt - Date.now());
@@ -1216,11 +1196,6 @@ async function doSplit(animalId) {
         <span class="qa-label">{{ tx("quick.tickets") }}</span>
         <span class="qa-sub">{{ tx("quick.release") }}</span>
       </router-link>
-      <router-link to="/merge" class="qa-btn">
-        <span class="qa-icon">🐾</span>
-        <span class="qa-label">{{ tx("quick.merge") }}</span>
-        <span class="qa-sub">2048</span>
-      </router-link>
       <router-link to="/memory" class="qa-btn">
         <span class="qa-icon">🧠</span>
         <span class="qa-label">{{ tx("quick.memory") }}</span>
@@ -1717,31 +1692,9 @@ async function doSplit(animalId) {
     </router-link>
 
     <component
-      :is="mergeEnded ? 'div' : 'router-link'"
-      :to="mergeEnded ? undefined : '/merge'"
-      class="card merge-link"
-      :class="{ 'event-ended': mergeEnded }"
-    >
-      <div class="ml-icon">🐾</div>
-      <div class="bpl-body">
-        <div class="ml-title">{{ tx("mergeLink.title") }}</div>
-        <div class="bpl-sub">{{ tx("mergeLink.sub") }}</div>
-        <div
-          v-if="mergeEnded"
-          class="bpl-event-status ended"
-        >⏰ {{ tx("eventStatus.ended") }}</div>
-        <div
-          v-else-if="game.mergeEndsAt > 0"
-          class="bpl-event-status"
-        >⏳ {{ tx("eventStatus.endsIn", { time: fmtCountdown(mergeRemaining) }) }}</div>
-      </div>
-      <div class="bpl-arrow">{{ mergeEnded ? '🔒' : '›' }}</div>
-    </component>
-
-    <component
       :is="memoryEnded ? 'div' : 'router-link'"
       :to="memoryEnded ? undefined : '/memory'"
-      class="card merge-link memory-link"
+      class="card event-link"
       :class="{ 'event-ended': memoryEnded }"
     >
       <div class="ml-icon">🧠</div>
@@ -2908,13 +2861,13 @@ async function doSplit(animalId) {
   border-color: rgba(239, 71, 111, 0.55);
   color: #ef476f;
 }
-.merge-link.event-ended {
+.event-link.event-ended {
   cursor: not-allowed;
   filter: grayscale(0.65);
   opacity: 0.7;
   border-color: rgba(239, 71, 111, 0.45);
 }
-.merge-link.event-ended:hover {
+.event-link.event-ended:hover {
   transform: none;
   box-shadow: none;
 }
@@ -2925,7 +2878,7 @@ async function doSplit(animalId) {
   line-height: 1;
   flex-shrink: 0;
 }
-.merge-link {
+.event-link {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2939,7 +2892,7 @@ async function doSplit(animalId) {
   border: 1px solid rgba(6, 214, 160, 0.3);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.merge-link:hover {
+.event-link:hover {
   transform: translateY(-2px);
   border-color: #06d6a0;
   box-shadow: 0 12px 28px rgba(6, 214, 160, 0.15);
