@@ -9,6 +9,7 @@ const routes = [
   { path: '/trade', name: 'trade', component: () => import('./views/TradeView.vue'), meta: { auth: true } },
   { path: '/send', redirect: '/trade' },
   { path: '/friends', name: 'friends', component: () => import('./views/FriendsView.vue'), meta: { auth: true } },
+  { path: '/roadmap', name: 'roadmap', component: () => import('./views/RoadmapView.vue'), meta: { auth: true } },
   { path: '/leaderboard', name: 'leaderboard', component: () => import('./views/LeaderboardView.vue'), meta: { auth: true } },
   { path: '/boss-fight', name: 'bossFight', component: () => import('./views/BossFightView.vue'), meta: { auth: true } },
   { path: '/boss-path', redirect: { name: 'bossFight', query: { mode: 'path' } } },

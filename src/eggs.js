@@ -4,6 +4,13 @@ import { supabase } from './supabase'
 export { rarityInfo, sortByRarity, formatDropChance } from './eggRarity.js'
 
 export const EGG_TYPES = reactive({})
+export const EGG_DROP_SPECIES = reactive(new Set())
+
+export async function loadEggDropSpecies() {
+  const { data } = await supabase.from('egg_drop_pool').select('species')
+  EGG_DROP_SPECIES.clear()
+  for (const r of data || []) EGG_DROP_SPECIES.add(r.species)
+}
 
 export async function loadEggCatalog() {
   const { data } = await supabase.from('egg_types')
@@ -12,4 +19,5 @@ export async function loadEggCatalog() {
   for (const r of data || []) {
     EGG_TYPES[r.egg_type] = { ...r }
   }
+  await loadEggDropSpecies()
 }
