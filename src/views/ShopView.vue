@@ -88,6 +88,7 @@ const myPurchases = ref({});
 const speciesMeta = ref({});
 const eggStock = ref({});
 const eggMeta = ref({});
+const eggInfo = ref(null);
 const rotatesAt = ref(0);
 const serverOffset = ref(0);
 const now = ref(Date.now());
@@ -662,20 +663,11 @@ function goToTickets() {
         :class="{ 'out-of-stock': !e.inStock }"
       >
         <div class="rarity-stripe egg-stripe">✨ EI ✨</div>
+        <Button class="egg-info-btn" @click="eggInfo = e" :title="t('eggs.shopCardDropChances')">ℹ️</Button>
         <div class="animal-emoji">{{ e.meta.emoji }}</div>
         <div class="animal-name">{{ e.meta.name }}</div>
         <div class="animal-meta">
           {{ t('eggs.shopCardSubtitle', { minutes: e.meta.incubation_minutes, count: e.meta.drops.length }) }}
-        </div>
-        <div class="drop-row">
-          <span
-            v-for="d in e.meta.drops"
-            :key="d.species"
-            class="drop-chip"
-            :style="{ borderColor: rarityInfo(d.rarity).color, color: rarityInfo(d.rarity).color }"
-          >
-            {{ rarityInfo(d.rarity).emoji }} {{ eggDropPercent(d, e.meta) }}% {{ d.emoji }}
-          </span>
         </div>
         <div class="animal-cost">🪙 {{ formatCoins(e.meta.price) }}</div>
         <Button
@@ -812,6 +804,28 @@ function goToTickets() {
     <p v-if="promoMessage" class="success promo-msg">{{ promoMessage }}</p>
   </div>
 
+  <div v-if="eggInfo" class="chest-modal" @click.self="eggInfo = null">
+    <div class="egg-info-dialog">
+      <div class="row between" style="align-items:center;margin-bottom:12px">
+        <h3 style="margin:0;font-size:18px">{{ eggInfo.meta.emoji }} {{ eggInfo.meta.name }}</h3>
+        <Button class="btn secondary small" @click="eggInfo = null">×</Button>
+      </div>
+      <div class="subtitle" style="margin:0 0 10px;font-size:13px">{{ t('eggs.shopCardDropChances') }}</div>
+      <div class="egg-info-drops">
+        <div
+          v-for="d in eggInfo.meta.drops"
+          :key="d.species"
+          class="egg-info-row"
+          :style="{ color: rarityInfo(d.rarity).color, borderColor: rarityInfo(d.rarity).color }"
+        >
+          <span class="egg-info-rarity">{{ rarityInfo(d.rarity).emoji }}</span>
+          <span class="egg-info-pct">{{ eggDropPercent(d, eggInfo.meta) }}%</span>
+          <span class="egg-info-animal">{{ d.emoji }} {{ d.name }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Animal Limit Warning Modal -->
   <div v-if="animalLimitWarning" class="chest-modal" @click.self="closeAnimalLimitWarning">
     <div class="warning-dialog">
@@ -858,21 +872,53 @@ function goToTickets() {
   position: relative;
   padding-top: 22px;
 }
-.drop-row {
+.egg-info-btn {
+  position: absolute;
+  top: 24px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 14px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 6px 0;
+  align-items: center;
   justify-content: center;
+  cursor: pointer;
+  z-index: 2;
 }
-.drop-chip {
-  font-size: 11px;
-  padding: 2px 6px;
+.egg-info-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: var(--accent);
+}
+.egg-info-dialog {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  width: min(360px, 92vw);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+}
+.egg-info-drops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.egg-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border: 1px solid;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
   font-weight: 700;
 }
+.egg-info-rarity { font-size: 18px; }
+.egg-info-pct { font-size: 16px; min-width: 48px; font-variant-numeric: tabular-nums; }
+.egg-info-animal { font-size: 16px; flex: 1; }
 .is-forced {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
