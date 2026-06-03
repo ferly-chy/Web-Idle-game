@@ -20,6 +20,10 @@ const adminBusy = ref('')
 const isAdmin = computed(() => !!(auth.profile?.is_admin || auth.profile?.is_subadmin))
 const adminStatuses = ['idea', 'planned', 'in_progress', 'done', 'rejected']
 
+function isOwnIdea(idea) {
+  return !!auth.user && idea.created_by === auth.user.id
+}
+
 async function load() {
   loading.value = true
   try {
@@ -99,6 +103,17 @@ async function adminDelete(idea) {
   adminBusy.value = 'del-' + idea.id
   try {
     const { error } = await supabase.rpc('admin_delete_idea', { p_idea_id: idea.id })
+    if (error) throw error
+    ideas.value = ideas.value.filter(i => i.id !== idea.id)
+    toast.ok(t('roadmap.deleted'))
+  } catch (e) { toast.err(e) } finally { adminBusy.value = '' }
+}
+
+async function deleteOwn(idea) {
+  if (!confirm(t('roadmap.deleteConfirm'))) return
+  adminBusy.value = 'own-' + idea.id
+  try {
+    const { error } = await supabase.rpc('delete_own_idea', { p_idea_id: idea.id })
     if (error) throw error
     ideas.value = ideas.value.filter(i => i.id !== idea.id)
     toast.ok(t('roadmap.deleted'))
@@ -187,6 +202,13 @@ async function submitIdea() {
               {{ statusEmoji(idea.status) }} {{ statusLabel(idea.status) }}
             </span>
             <span v-if="idea.author_username" class="author">— {{ idea.author_username }}</span>
+            <Button
+              v-if="!isAdmin && isOwnIdea(idea)"
+              class="own-delete"
+              :disabled="adminBusy === 'own-' + idea.id"
+              :title="t('roadmap.delete')"
+              @click.stop="deleteOwn(idea)"
+            >🗑️</Button>
           </div>
 
           <div v-if="isAdmin" class="admin-controls" @click.stop>
@@ -318,6 +340,18 @@ async function submitIdea() {
   color: var(--danger);
 }
 .author { font-size: 11px; color: var(--muted); }
+.own-delete {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(239, 71, 111, 0.4);
+  color: var(--danger);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.own-delete:hover { border-color: var(--danger); background: rgba(239, 71, 111, 0.12); }
+.own-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .admin-controls {
   margin-top: 10px;
