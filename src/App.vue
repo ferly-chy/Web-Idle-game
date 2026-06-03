@@ -341,8 +341,8 @@ async function hardReload() {
         <span class="ico">🔄</span><span>{{ t('app.nav.trade') }}</span>
       </router-link>
       <router-link to="/" class="nav-fab" :title="t('app.nav.home')">🏡</router-link>
-      <router-link to="/friends" class="nav-item">
-        <span class="ico">🤝</span><span>{{ t('app.nav.friends') }}</span>
+      <router-link to="/roadmap" class="nav-item">
+        <span class="ico">🗺️</span><span>{{ t('app.nav.roadmap') }}</span>
       </router-link>
       <router-link to="/leaderboard" class="nav-item">
         <span class="ico">🏆</span><span>{{ t('app.nav.rank') }}</span>
