@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import { useAuthStore } from '../stores/auth'
 import { SPECIES, loadCatalog, tierInfo } from '../animals'
+import { EGG_DROP_SPECIES, loadEggCatalog, rarityInfo } from '../eggs'
 import { t } from '../i18n'
 import { useReturnRefresh } from '../composables/useReturnRefresh'
 
@@ -26,6 +27,7 @@ async function load() {
   error.value = ''
   try {
     if (!Object.keys(SPECIES).length) await loadCatalog()
+    await loadEggCatalog()
     const { data: p, error: pe } = await supabase.from('profiles')
       .select('id, username, avatar_emoji').eq('username', username.value).maybeSingle()
     if (pe) throw pe
@@ -70,7 +72,7 @@ const speciesIndex = computed(() => {
   // Alle bekannten Spezies durchgehen, damit auch nicht-besessene fehlen.
   // Deaktivierte Spezies (z. B. Einhorn, Phoenix) werden angezeigt, wenn der Spieler sie besitzt.
   return Object.values(SPECIES)
-    .filter(s => s.enabled !== false || !!map[s.key])
+    .filter(s => s.enabled !== false || EGG_DROP_SPECIES.has(s.key) || !!map[s.key])
     .sort((a, b) => a.cost - b.cost)
     .map(s => {
       const d = map[s.key]
@@ -140,6 +142,9 @@ const filters = computed(() => [
           :class="{ owned: c.owned, missing: !c.owned }"
           :style="c.owned ? { '--tier-color': tierInfo(c.best).color } : null"
         >
+          <div class="rarity-stripe" :style="{ background: rarityInfo(c.info.rarity || 'common').color }">
+            {{ rarityInfo(c.info.rarity || 'common').emoji }}
+          </div>
           <div class="idx-emoji">
             {{ c.info.emoji }}
             <span v-if="c.owned && tierInfo(c.best).badge" class="idx-badge">
@@ -211,7 +216,19 @@ const filters = computed(() => [
   background: color-mix(in srgb, var(--tier-color) 18%, #162048);
   border: 1px solid color-mix(in srgb, var(--tier-color) 40%, var(--border));
   border-radius: 12px;
-  padding: 10px 6px 8px;
+  padding: 18px 6px 8px;
+  overflow: hidden;
+}
+.idx-cell .rarity-stripe {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  border-radius: 12px 12px 0 0;
+  z-index: 1;
   text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
 }

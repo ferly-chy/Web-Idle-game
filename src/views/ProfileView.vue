@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { useAuthStore } from '../stores/auth'
 import { SPECIES, tierInfo, loadCatalog, formatCoins } from '../animals'
+import { EGG_DROP_SPECIES, loadEggCatalog, rarityInfo } from '../eggs'
 import { t } from '../i18n'
 import { useReturnRefresh } from '../composables/useReturnRefresh'
 import { useAppToast } from '../composables/useAppToast'
@@ -34,6 +35,7 @@ async function load() {
   error.value = ''
   try {
     if (!Object.keys(SPECIES).length) await loadCatalog()
+    await loadEggCatalog()
     const { data: p, error: pe } = await supabase.from('profiles')
       .select('id, username, coins, avatar_emoji, created_at')
       .eq('username', username.value).maybeSingle()
@@ -95,7 +97,7 @@ const collection = computed(() => {
   }
 
   return Object.values(SPECIES)
-    .filter(s => s.enabled !== false || !!allEntriesMap.value[s.key])
+    .filter(s => s.enabled !== false || EGG_DROP_SPECIES.has(s.key) || !!allEntriesMap.value[s.key])
     .sort((a, b) => a.cost - b.cost)
     .map(s => {
       const d = map[s.key]
@@ -124,7 +126,7 @@ const ownedCount = computed(() => Object.keys(allEntriesMap.value).length)
 const totalSpecies = computed(() => collection.value.length)
 
 const badges = computed(() => {
-  const allSpecies = Object.values(SPECIES).filter(s => s.enabled !== false)
+  const allSpecies = Object.values(SPECIES).filter(s => s.enabled !== false || EGG_DROP_SPECIES.has(s.key))
   if (!allSpecies.length || !entries.value.length) return []
   const out = []
   const every = allSpecies.every(s => !!allEntriesMap.value[s.key])
